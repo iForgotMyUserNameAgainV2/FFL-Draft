@@ -83,6 +83,86 @@ export function lineupEfficiency(pointsFor: number, maxPointsFor: number): numbe
   return Math.min(1, Math.max(0, pointsFor / maxPointsFor));
 }
 
+export interface StartSitSwap {
+  start: ScoredPlayer;
+  sit: ScoredPlayer;
+  delta: number;
+}
+
+export interface StartSitAdvice {
+  /** Projected points of the current starting lineup (pool players only). */
+  currentPoints: number;
+  /** Projected points of the optimal lineup. */
+  optimalPoints: number;
+  /** Projected points left on the bench by the current lineup. */
+  gain: number;
+  /** Players the optimal lineup inserts. */
+  starts: ScoredPlayer[];
+  /** Currently-started players the optimal lineup benches. */
+  sits: ScoredPlayer[];
+  /**
+   * Start↔sit pairs, matched same-position first (flex cross-position
+   * swaps fall back to the lowest-scoring remaining sit). Deltas sum to
+   * `gain`.
+   */
+  swaps: StartSitSwap[];
+  optimal: OptimalLineupResult;
+}
+
+/**
+ * Start/sit advisor: compares the current starters against the optimal
+ * lineup over the same projection metric (season PPG). The returned
+ * starts/sits are the swap set that closes the gap.
+ */
+export function startSitAdvice(
+  pool: ScoredPlayer[],
+  currentStarterIds: string[],
+  slots: LineupSlot[],
+): StartSitAdvice {
+  const optimal = computeOptimalLineup(pool, slots);
+  const optimalIds = new Set(
+    optimal.lineup.map((e) => e.player?.playerId).filter((id): id is string => !!id),
+  );
+  const poolIds = new Set(pool.map((p) => p.playerId));
+  const currentIds = new Set(currentStarterIds.filter((id) => poolIds.has(id)));
+
+  const currentPoints = pool
+    .filter((p) => currentIds.has(p.playerId))
+    .reduce((s, p) => s + p.points, 0);
+  const starts = pool
+    .filter((p) => optimalIds.has(p.playerId) && !currentIds.has(p.playerId))
+    .sort((a, b) => b.points - a.points);
+  const sits = pool
+    .filter((p) => currentIds.has(p.playerId) && !optimalIds.has(p.playerId))
+    .sort((a, b) => b.points - a.points);
+
+  const sitsLeft = [...sits];
+  const swaps: StartSitSwap[] = [];
+  for (const start of starts) {
+    if (sitsLeft.length === 0) break;
+    let idx = sitsLeft.findIndex((s) => s.position === start.position);
+    if (idx === -1) {
+      // Cross-position (flex) swap: bench the weakest remaining sit.
+      idx = sitsLeft.reduce(
+        (min, s, i) => (s.points < (sitsLeft[min]?.points ?? Infinity) ? i : min),
+        0,
+      );
+    }
+    const [sit] = sitsLeft.splice(idx, 1);
+    if (sit) swaps.push({ start, sit, delta: start.points - sit.points });
+  }
+
+  return {
+    currentPoints,
+    optimalPoints: optimal.maxPoints,
+    gain: Math.max(0, optimal.maxPoints - currentPoints),
+    starts,
+    sits,
+    swaps,
+    optimal,
+  };
+}
+
 export interface PostureInputs {
   /** This team's total asset value percentile within the league, [0, 1]. */
   valuePercentile: number;

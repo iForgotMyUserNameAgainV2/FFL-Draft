@@ -49,6 +49,17 @@ export function aggregateSeasonStats(
   return stats;
 }
 
+/**
+ * Approximate replacement-level PPG per position — the bridge from PAR
+ * back to a projectable points-per-game when live PPG is unavailable.
+ */
+export const PPG_BASELINE: Record<Position, number> = {
+  QB: 14,
+  RB: 8,
+  WR: 8,
+  TE: 6,
+};
+
 /** Modeled positional share of flex-slot starts. */
 const FLEX_SHARE: Record<Position, number> = { QB: 0, RB: 0.35, WR: 0.5, TE: 0.15 };
 const SUPER_FLEX_SHARE: Record<Position, number> = { QB: 0.8, RB: 0.07, WR: 0.1, TE: 0.03 };

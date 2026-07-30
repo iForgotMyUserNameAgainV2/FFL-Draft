@@ -26,6 +26,7 @@ import {
 import {
   computeOptimalLineup,
   lineupEfficiency,
+  startSitAdvice,
   tankContendPosture,
   type ScoredPlayer,
 } from "@/lib/math/max-pf";
@@ -68,6 +69,7 @@ function player(overrides: Partial<PlayerAsset> = {}): PlayerAsset {
     age: overrides.age ?? 24,
     yearsExp: overrides.yearsExp ?? 2,
     par: overrides.par ?? 5,
+    ppg: overrides.ppg ?? null,
     contractFactor: overrides.contractFactor ?? 0.75,
     draftCapital: overrides.draftCapital ?? 0.8,
     ...overrides,
@@ -98,6 +100,7 @@ function teamProfile(
       ownerName: `Team ${rosterId}`,
       players: [],
       picks: [],
+      starters: [],
       record: { wins: 5, losses: 5, ties: 0 },
       pointsFor: 1000,
       maxPointsFor: 1100,
@@ -472,6 +475,68 @@ describe("Max-PF optimizer", () => {
       efficiency: 0.8,
     });
     expect(leaky.directives.some((d) => d.includes("efficiency"))).toBe(true);
+  });
+
+  it("startSitAdvice finds the swap set and projected gain", () => {
+    const pool: ScoredPlayer[] = [
+      { playerId: "rb1", position: "RB", points: 18 },
+      { playerId: "rb2", position: "RB", points: 12 },
+      { playerId: "rb3", position: "RB", points: 9 },
+      { playerId: "wr1", position: "WR", points: 15 },
+      { playerId: "wr2", position: "WR", points: 7 },
+    ];
+    // Currently starting the wrong RB (rb3 over rb2) in RB/RB/FLEX.
+    const advice = startSitAdvice(pool, ["rb1", "rb3", "wr1"], ["RB", "RB", "FLEX"]);
+    // Optimal: rb1 (18) + rb2 (12) + wr1 (15) = 45; current = 18 + 9 + 15 = 42.
+    expect(advice.optimalPoints).toBe(45);
+    expect(advice.currentPoints).toBe(42);
+    expect(advice.gain).toBe(3);
+    expect(advice.starts.map((p) => p.playerId)).toEqual(["rb2"]);
+    expect(advice.sits.map((p) => p.playerId)).toEqual(["rb3"]);
+    expect(advice.swaps).toEqual([
+      {
+        start: expect.objectContaining({ playerId: "rb2" }),
+        sit: expect.objectContaining({ playerId: "rb3" }),
+        delta: 3,
+      },
+    ]);
+  });
+
+  it("startSitAdvice pairs swaps same-position first", () => {
+    const pool: ScoredPlayer[] = [
+      { playerId: "qbGood", position: "QB", points: 20 },
+      { playerId: "qbBad", position: "QB", points: 15 },
+      { playerId: "rbGood", position: "RB", points: 12 },
+      { playerId: "rbBad", position: "RB", points: 8 },
+    ];
+    // Both leaks at once: wrong QB and wrong RB started.
+    const advice = startSitAdvice(pool, ["qbBad", "rbBad"], ["QB", "RB"]);
+    expect(advice.gain).toBe(9);
+    const byStart = new Map(advice.swaps.map((s) => [s.start.playerId, s]));
+    expect(byStart.get("qbGood")?.sit.playerId).toBe("qbBad");
+    expect(byStart.get("qbGood")?.delta).toBe(5);
+    expect(byStart.get("rbGood")?.sit.playerId).toBe("rbBad");
+    expect(byStart.get("rbGood")?.delta).toBe(4);
+  });
+
+  it("startSitAdvice reports zero gain for an already-optimal lineup", () => {
+    const pool: ScoredPlayer[] = [
+      { playerId: "qb1", position: "QB", points: 22 },
+      { playerId: "qb2", position: "QB", points: 17 },
+    ];
+    const advice = startSitAdvice(pool, ["qb1"], ["QB"]);
+    expect(advice.gain).toBe(0);
+    expect(advice.starts).toHaveLength(0);
+    expect(advice.sits).toHaveLength(0);
+  });
+
+  it("startSitAdvice ignores starter ids outside the pool (DEF/K slots)", () => {
+    const pool: ScoredPlayer[] = [
+      { playerId: "rb1", position: "RB", points: 14 },
+    ];
+    const advice = startSitAdvice(pool, ["rb1", "DEF_SF", "0"], ["RB"]);
+    expect(advice.currentPoints).toBe(14);
+    expect(advice.gain).toBe(0);
   });
 });
 

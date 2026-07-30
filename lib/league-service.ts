@@ -23,6 +23,7 @@ import type {
   TeamProfile,
   TeamRoster,
   TradeProposal,
+  WaiverCandidate,
 } from "@/lib/types/dynasty";
 import { isPosition } from "@/lib/types/dynasty";
 import {
@@ -82,6 +83,8 @@ export interface LeagueAnalytics {
   /** Season the weekly stats were drawn from (null when estimated only). */
   statsSeason: number | null;
   weekly: WeeklyPerformance[];
+  /** Top unrostered players worth a waiver claim. */
+  waivers: WaiverCandidate[];
 }
 
 export interface SerializedMdiResult extends Omit<MdiResult, "asset"> {
@@ -105,11 +108,20 @@ export interface AssemblyInput {
   parSource: "live" | "estimated";
   statsSeason: number | null;
   weekly: WeeklyPerformance[];
+  waivers?: WaiverCandidate[];
 }
 
 export function assembleAnalytics(input: AssemblyInput): LeagueAnalytics {
-  const { settings, phase, rosters, marketValueOf, parSource, statsSeason, weekly } =
-    input;
+  const {
+    settings,
+    phase,
+    rosters,
+    marketValueOf,
+    parSource,
+    statsSeason,
+    weekly,
+    waivers = [],
+  } = input;
   const currentSeason = settings.season;
 
   // --- team profiles -----------------------------------------------------
@@ -204,8 +216,31 @@ export function assembleAnalytics(input: AssemblyInput): LeagueAnalytics {
   );
 
   const teamById = new Map(teams.map((t) => [t.roster.rosterId, t]));
+
+  // Pair coverage: the top synergy pairs league-wide, PLUS every team's
+  // single best partner — so the optimizer always has focused proposals
+  // for whichever roster the manager runs.
+  const pairKey = (c: SynergyCell) =>
+    `${Math.min(c.rosterIdA, c.rosterIdB)}-${Math.max(c.rosterIdA, c.rosterIdB)}`;
+  const seenPairs = new Set<string>();
+  const pairs: SynergyCell[] = [];
+  const addPair = (cell: SynergyCell | undefined) => {
+    if (!cell || seenPairs.has(pairKey(cell))) return;
+    seenPairs.add(pairKey(cell));
+    pairs.push(cell);
+  };
+  synergy.slice(0, 8).forEach(addPair);
+  for (const t of teams) {
+    addPair(
+      synergy.find(
+        (c) =>
+          c.rosterIdA === t.roster.rosterId || c.rosterIdB === t.roster.rosterId,
+      ),
+    );
+  }
+
   const proposals: TradeProposal[] = [];
-  for (const cell of synergy.slice(0, 8)) {
+  for (const cell of pairs) {
     const teamA = teamById.get(cell.rosterIdA);
     const teamB = teamById.get(cell.rosterIdB);
     if (!teamA || !teamB) continue;
@@ -227,10 +262,11 @@ export function assembleAnalytics(input: AssemblyInput): LeagueAnalytics {
     teams,
     mdi,
     synergy,
-    proposals: proposals.slice(0, 20),
+    proposals: proposals.slice(0, 36),
     parSource,
     statsSeason,
     weekly,
+    waivers,
   };
 }
 
@@ -287,6 +323,7 @@ export async function buildLeagueAnalytics(leagueId: string): Promise<LeagueAnal
           p.years_exp,
           rank,
           parByPlayer?.get(pid) ?? null,
+          liveStats?.stats.get(pid)?.ppg ?? null,
         );
       })
       .filter((p): p is PlayerAsset => p !== null);
@@ -299,6 +336,7 @@ export async function buildLeagueAnalytics(leagueId: string): Promise<LeagueAnal
         owner?.metadata?.team_name || owner?.display_name || `Roster ${roster.roster_id}`,
       players: playerAssets,
       picks: [],
+      starters: (roster.starters ?? []).filter((id) => id !== "0"),
       record: {
         wins: roster.settings.wins,
         losses: roster.settings.losses,
@@ -334,6 +372,33 @@ export async function buildLeagueAnalytics(leagueId: string): Promise<LeagueAnal
     ? computeWeeklyPerformance(liveStats.weeks, players, settings)
     : [];
 
+  // --- waiver wire: best unrostered players by market value ---------------
+  const rosteredIds = new Set(
+    rosterAssets.flatMap((r) => r.players.map((p) => p.id)),
+  );
+  const waivers: WaiverCandidate[] = [];
+  for (const [pid, entry] of consensus) {
+    if (rosteredIds.has(pid)) continue;
+    const p = players[pid];
+    if (!p || !isPosition(p.position)) continue;
+    waivers.push({
+      player: buildPlayerAsset(
+        pid,
+        p.name,
+        p.position,
+        p.team,
+        p.age,
+        p.years_exp,
+        positionRanks.get(pid) ?? 80,
+        parByPlayer?.get(pid) ?? null,
+        liveStats?.stats.get(pid)?.ppg ?? null,
+      ),
+      marketValue: entry.value,
+      trend30d: entry.trend30d,
+    });
+  }
+  waivers.sort((a, b) => b.marketValue - a.marketValue);
+
   return assembleAnalytics({
     settings,
     phase,
@@ -342,6 +407,7 @@ export async function buildLeagueAnalytics(leagueId: string): Promise<LeagueAnal
     parSource: parByPlayer ? "live" : "estimated",
     statsSeason: liveStats?.season ?? null,
     weekly,
+    waivers: waivers.slice(0, 40),
   });
 }
 
@@ -484,6 +550,7 @@ function buildPlayerAsset(
   yearsExp: number | null,
   positionRank: number,
   livePar: number | null,
+  livePpg: number | null,
 ): PlayerAsset {
   const exp = yearsExp ?? 3;
   return {
@@ -495,6 +562,7 @@ function buildPlayerAsset(
     age: age ?? 26,
     yearsExp: exp,
     par: livePar ?? estimatePar(position, positionRank),
+    ppg: livePpg,
     // Rookie-contract security: 4-year deals, tapering after year 4.
     contractFactor: Math.max(0.2, Math.min(1, (5 - exp) / 4)),
     // Draft-capital prior placeholder: young early-rank players carry

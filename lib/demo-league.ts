@@ -11,9 +11,12 @@ import type {
   PlayerAsset,
   Position,
   TeamRoster,
+  WaiverCandidate,
 } from "@/lib/types/dynasty";
 import { playerEngineValue } from "@/lib/math/mdi";
 import { pickEngineValue, phaseFromDate } from "@/lib/math/liquidity";
+import { computeOptimalLineup, type ScoredPlayer } from "@/lib/math/max-pf";
+import { PPG_BASELINE } from "@/lib/math/par";
 import {
   assembleAnalytics,
   type LeagueAnalytics,
@@ -175,6 +178,7 @@ export function buildDemoAnalytics(now = new Date()): LeagueAnalytics {
     const rosterId = idx + 1;
     const players: PlayerAsset[] = seeds.map((seed, j) => {
       const id = `demo-${rosterId}-${j}`;
+      const par = tierPar(seed.tier, rand);
       const asset: PlayerAsset = {
         kind: "player",
         id,
@@ -183,7 +187,8 @@ export function buildDemoAnalytics(now = new Date()): LeagueAnalytics {
         team: seed.team,
         age: seed.age,
         yearsExp: Math.max(0, seed.age - 22),
-        par: tierPar(seed.tier, rand),
+        par,
+        ppg: Number((PPG_BASELINE[seed.position] + par + (rand() - 0.5) * 1.5).toFixed(1)),
         contractFactor: Math.max(0.2, Math.min(1, (5 - Math.max(0, seed.age - 22)) / 4)),
         draftCapital: seed.tier <= 2 ? 0.85 : seed.tier === 3 ? 0.6 : 0.3,
       };
@@ -193,6 +198,45 @@ export function buildDemoAnalytics(now = new Date()): LeagueAnalytics {
       marketValues.set(id, Math.round(playerEngineValue(asset) * sentiment));
       return asset;
     });
+
+    // Starters: the optimal lineup with two deliberate leaks (a benched
+    // riser and an over-started veteran) so the start/sit advisor has
+    // something real to find in every demo roster.
+    const pool: ScoredPlayer[] = players.map((p) => ({
+      playerId: p.id,
+      position: p.position,
+      points: p.ppg ?? 0,
+    }));
+    const optimal = computeOptimalLineup(pool, [
+      "QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "SUPER_FLEX",
+    ]);
+    const starterIds = optimal.lineup
+      .map((e) => e.player?.playerId)
+      .filter((sid): sid is string => !!sid);
+    const starters = [...starterIds];
+    const starterSet = new Set(starterIds);
+    // Same-position swaps only, so the leaked lineup stays slot-valid and
+    // the advisor's projected gain is exactly the sum of the two deltas.
+    let leaks = 0;
+    for (const pos of ["RB", "WR", "TE", "QB"] as Position[]) {
+      if (leaks >= 2) break;
+      const weakestStarted = players
+        .filter((p) => starterSet.has(p.id) && p.position === pos)
+        .sort((a, b) => (a.ppg ?? 0) - (b.ppg ?? 0))[0];
+      const bestBenched = players
+        .filter((p) => !starterSet.has(p.id) && p.position === pos)
+        .sort((a, b) => (b.ppg ?? 0) - (a.ppg ?? 0))[0];
+      if (
+        weakestStarted &&
+        bestBenched &&
+        (bestBenched.ppg ?? 0) < (weakestStarted.ppg ?? 0)
+      ) {
+        starters[starters.indexOf(weakestStarted.id)] = bestBenched.id;
+        starterSet.delete(weakestStarted.id);
+        starterSet.add(bestBenched.id);
+        leaks++;
+      }
+    }
 
     const picks: PickAsset[] = [1, 2, 3].flatMap((yearOut) =>
       ([1, 2, 3, 4] as const).map((round) => ({
@@ -213,6 +257,7 @@ export function buildDemoAnalytics(now = new Date()): LeagueAnalytics {
       ownerName: TEAM_NAMES[idx]!,
       players,
       picks,
+      starters,
       record: { wins, losses: 13 - wins, ties: 0 },
       pointsFor,
       maxPointsFor: pointsFor / (0.86 + rand() * 0.1),
@@ -240,6 +285,43 @@ export function buildDemoAnalytics(now = new Date()): LeagueAnalytics {
     }
   }
 
+  // --- waiver wire: fictional free agents, a couple worth streaming ------
+  const WAIVER_SEEDS: SeedPlayer[] = [
+    { name: "Malachi Sterling", position: "WR", team: "NO", age: 23, tier: 3 },
+    { name: "Dontrell Mabry", position: "RB", team: "SEA", age: 24, tier: 4 },
+    { name: "Cassius Holloway", position: "TE", team: "CAR", age: 25, tier: 4 },
+    { name: "Amari Frost", position: "WR", team: "TEN", age: 22, tier: 4 },
+    { name: "Ezekiel Prather", position: "QB", team: "CLE", age: 26, tier: 4 },
+    { name: "Trevon Ledbetter", position: "RB", team: "TB", age: 23, tier: 4 },
+    { name: "Isaiah Kern", position: "WR", team: "DEN", age: 27, tier: 5 },
+    { name: "Jaxon Whitehurst", position: "QB", team: "NYG", age: 24, tier: 5 },
+    { name: "Darius Pemberton", position: "RB", team: "MIN", age: 25, tier: 5 },
+    { name: "Kellen Vance", position: "TE", team: "JAX", age: 24, tier: 5 },
+    { name: "Roman Tibbs", position: "WR", team: "WAS", age: 23, tier: 5 },
+    { name: "Solomon Ridgeway", position: "RB", team: "DAL", age: 26, tier: 5 },
+  ];
+  const waivers: WaiverCandidate[] = WAIVER_SEEDS.map((seed, i) => {
+    const par = tierPar(seed.tier, rand) * 0.8;
+    const player: PlayerAsset = {
+      kind: "player",
+      id: `demo-fa-${i}`,
+      name: seed.name,
+      position: seed.position,
+      team: seed.team,
+      age: seed.age,
+      yearsExp: Math.max(0, seed.age - 22),
+      par,
+      ppg: Number((PPG_BASELINE[seed.position] + par + (rand() - 0.5)).toFixed(1)),
+      contractFactor: 0.4,
+      draftCapital: 0.2,
+    };
+    return {
+      player,
+      marketValue: Math.round(playerEngineValue(player) * (0.7 + rand() * 0.3)),
+      trend30d: Math.round((rand() - 0.35) * 400),
+    };
+  }).sort((a, b) => b.marketValue - a.marketValue);
+
   return assembleAnalytics({
     settings,
     phase,
@@ -248,5 +330,6 @@ export function buildDemoAnalytics(now = new Date()): LeagueAnalytics {
     parSource: "live",
     statsSeason: season - 1,
     weekly,
+    waivers,
   });
 }

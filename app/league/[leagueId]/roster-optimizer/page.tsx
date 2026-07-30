@@ -8,6 +8,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MaxPfChart } from "@/components/max-pf-chart";
+import { RosterTable } from "@/components/roster-table";
+import {
+  StartSitCard,
+  TradeAnglesCard,
+  WaiverTargetsCard,
+} from "@/components/optimizer-suggestions";
+import { ProposalList } from "@/components/trade-builder";
 import { useLeagueAnalytics } from "@/lib/hooks";
 import { useMyRosterId } from "@/lib/store";
 import { lineupEfficiency, tankContendPosture } from "@/lib/math/max-pf";
@@ -21,8 +28,14 @@ export default function RosterOptimizerPage() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-40 w-full" />
-        <Skeleton className="h-80 w-full" />
+        <Skeleton className="h-20 w-2/3" />
+        <div className="grid gap-4 sm:grid-cols-4">
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+        </div>
+        <Skeleton className="h-96 w-full" />
       </div>
     );
   }
@@ -60,12 +73,12 @@ export default function RosterOptimizerPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Max-PF optimizer"
-        title="Tank vs. Contend"
+        eyebrow="Win-your-league console"
+        title="Roster Optimizer"
         description={
           myRosterId === null
-            ? `Max-PF efficiency and asset positioning for ${roster.ownerName} — pick your team in the header to lock focus.`
-            : `Max-PF efficiency and asset positioning for ${roster.ownerName}.`
+            ? `Showing ${roster.ownerName} — pick your team in the header to lock focus.`
+            : `Every lever for ${roster.ownerName}: lineup, waivers, and the trade market.`
         }
       />
 
@@ -102,6 +115,38 @@ export default function RosterOptimizerPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Current roster</CardTitle>
+          <CardDescription>
+            {roster.ownerName} — every player with the engine&apos;s read: projected
+            PPG, points above replacement, market value, and MDI signal.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <RosterTable team={team} mdi={data.mdi} />
+        </CardContent>
+      </Card>
+
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <StartSitCard team={team} analytics={data} />
+        <WaiverTargetsCard team={team} analytics={data} />
+      </div>
+
+      <TradeAnglesCard team={team} analytics={data} />
+
+      <section>
+        <p className="microlabel mb-1 text-accent-bright">Matchmaker</p>
+        <h2 className="mb-4 text-lg font-semibold tracking-tight">
+          Ready-made trades for {roster.ownerName}
+        </h2>
+        <ProposalList
+          analytics={data}
+          focusRosterId={team.roster.rosterId}
+          limit={3}
+        />
+      </section>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Actual PF vs Max-PF by week</CardTitle>
           <CardDescription>
             {data.statsSeason
@@ -114,52 +159,57 @@ export default function RosterOptimizerPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Strategic directives</CardTitle>
-          <CardDescription>
-            Generated from value percentile, Weibull win-now share, record, and
-            lineup efficiency.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ul className="list-inside list-disc space-y-2 text-sm text-ink-secondary">
-            {posture.directives.map((d) => (
-              <li key={d}>{d}</li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Strategic directives</CardTitle>
+            <CardDescription>
+              Generated from value percentile, Weibull win-now share, record, and
+              lineup efficiency.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="list-inside list-disc space-y-2 text-sm text-ink-secondary">
+              {posture.directives.map((d) => (
+                <li key={d}>{d}</li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Positional balance</CardTitle>
-          <CardDescription>
-            Startable-player surplus (+) or deficit (−) vs league baseline — the
-            inputs the trade matchmaker uses to route proposals.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-4">
-          {(Object.entries(team.positionalBalance) as Array<[string, number]>).map(
-            ([pos, balance]) => (
-              <div
-                key={pos}
-                className="rounded-lg border border-white/10 bg-surface-2 px-3 py-2 text-center"
-              >
-                <p className="text-[11px] uppercase tracking-wider text-ink-muted">{pos}</p>
-                <p className="mt-1 font-mono text-lg font-bold tabular-nums">
-                  {balance >= 0 ? "+" : ""}
-                  {balance.toFixed(2)}
-                </p>
-                <p className="text-[11px] text-ink-muted">
-                  {balance >= 0.5 ? "surplus — trade from" : balance <= -0.5 ? "deficit — trade for" : "balanced"}
-                </p>
-              </div>
-            ),
-          )}
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Positional balance</CardTitle>
+            <CardDescription>
+              Startable surplus (+) or deficit (−) vs league baseline — routes the
+              matchmaker&apos;s proposals.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-3">
+            {(Object.entries(team.positionalBalance) as Array<[string, number]>).map(
+              ([pos, balance]) => (
+                <div
+                  key={pos}
+                  className="hairline rounded-lg bg-surface-2 px-3 py-2 text-center"
+                >
+                  <p className="microlabel">{pos}</p>
+                  <p className="mt-1 font-mono text-lg font-bold tabular-nums">
+                    {balance >= 0 ? "+" : ""}
+                    {balance.toFixed(2)}
+                  </p>
+                  <p className="text-[11px] text-ink-muted">
+                    {balance >= 0.5
+                      ? "surplus — trade from"
+                      : balance <= -0.5
+                        ? "deficit — trade for"
+                        : "balanced"}
+                  </p>
+                </div>
+              ),
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
-

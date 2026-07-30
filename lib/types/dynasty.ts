@@ -47,6 +47,8 @@ export interface PlayerAsset {
   yearsExp: number;
   /** Points Above Replacement over the trailing season (per-game basis). */
   par: number;
+  /** Season points per game from live scoring (null when estimated). */
+  ppg: number | null;
   /**
    * Contract / roster-security factor in [0, 1].
    * 1 = locked-in multi-year role, 0 = no contractual security.
@@ -144,10 +146,19 @@ export interface TeamRoster {
   ownerName: string;
   players: PlayerAsset[];
   picks: PickAsset[];
+  /** Player ids currently in the starting lineup (Sleeper order). */
+  starters: string[];
   record: { wins: number; losses: number; ties: number };
   pointsFor: number;
   /** Maximum possible points-for with perfect lineups. */
   maxPointsFor: number;
+}
+
+/** A free agent worth a waiver claim, with its market context. */
+export interface WaiverCandidate {
+  player: PlayerAsset;
+  marketValue: number;
+  trend30d: number;
 }
 
 export type CompetitiveWindow = "REBUILD" | "RETOOL" | "CONTEND" | "ALL_IN";

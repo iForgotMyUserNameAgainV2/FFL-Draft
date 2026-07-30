@@ -191,9 +191,11 @@ function sumSelected(
 export function ProposalList({
   analytics,
   focusRosterId = null,
+  limit,
 }: {
   analytics: LeagueAnalytics;
   focusRosterId?: number | null;
+  limit?: number;
 }) {
   const teamName = (rosterId: number) =>
     analytics.teams.find((t) => t.roster.rosterId === rosterId)?.roster.ownerName ??
@@ -214,7 +216,10 @@ export function ProposalList({
             p.sideA.rosterId === focusRosterId || p.sideB.rosterId === focusRosterId,
         );
   const showingFallback = focusRosterId !== null && mine.length === 0;
-  const visible = showingFallback ? analytics.proposals : mine;
+  const visible = (showingFallback ? analytics.proposals : mine).slice(
+    0,
+    limit ?? Infinity,
+  );
   return (
     <div className="space-y-3">
       {showingFallback && (
