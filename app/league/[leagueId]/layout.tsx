@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { Command, LayoutDashboard, Scale, TrendingUp, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { TeamSelector } from "@/components/team-selector";
 import { useLeagueAnalytics } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
@@ -55,16 +56,19 @@ export default function LeagueLayout({ children }: { children: React.ReactNode }
             })}
           </nav>
 
-          {data && (
-            <div className="hidden items-center gap-3 md:flex">
-              <span className="max-w-44 truncate text-xs font-medium text-ink-secondary">
-                {data.settings.name}
-              </span>
-              <Badge className="bg-surface-2 text-ink-secondary">
-                {data.phase.replace("_", " ")}
-              </Badge>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            <TeamSelector />
+            {data && (
+              <>
+                <span className="hidden max-w-44 truncate text-xs font-medium text-ink-secondary lg:inline">
+                  {data.settings.name}
+                </span>
+                <Badge className="hidden bg-surface-2 text-ink-secondary md:inline-flex">
+                  {data.phase.replace("_", " ")}
+                </Badge>
+              </>
+            )}
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>

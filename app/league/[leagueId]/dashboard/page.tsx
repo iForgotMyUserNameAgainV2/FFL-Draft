@@ -9,14 +9,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LeagueOverview } from "@/components/league-overview";
 import { AgingRadarChart, SurvivalCurvesChart } from "@/components/aging-radar-chart";
 import { useLeagueAnalytics } from "@/lib/hooks";
-import { useDynastyStore } from "@/lib/store";
+import { useMyRosterId } from "@/lib/store";
 import { PHASE_MULTIPLIERS } from "@/lib/math/liquidity";
 import { formatValue } from "@/lib/utils";
 
 export default function DashboardPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
   const { data, isLoading, error } = useLeagueAnalytics(leagueId ?? null);
-  const { myRosterId } = useDynastyStore();
+  const myRosterId = useMyRosterId(leagueId);
 
   if (isLoading) {
     return (

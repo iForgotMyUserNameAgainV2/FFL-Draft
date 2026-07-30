@@ -6,10 +6,12 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProposalList, TradeBuilder } from "@/components/trade-builder";
 import { useLeagueAnalytics } from "@/lib/hooks";
+import { useMyRosterId } from "@/lib/store";
 
 export default function TradeMatrixPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
   const { data, isLoading, error } = useLeagueAnalytics(leagueId ?? null);
+  const myRosterId = useMyRosterId(leagueId);
 
   if (isLoading) {
     return (
@@ -30,7 +32,14 @@ export default function TradeMatrixPage() {
   const teamName = (rosterId: number) =>
     data.teams.find((t) => t.roster.rosterId === rosterId)?.roster.ownerName ??
     `Roster ${rosterId}`;
-  const topSynergy = data.synergy.slice(0, 6);
+  // With a team selected, surface that team's best matchups first.
+  const mySynergy =
+    myRosterId === null
+      ? []
+      : data.synergy.filter(
+          (c) => c.rosterIdA === myRosterId || c.rosterIdB === myRosterId,
+        );
+  const topSynergy = (mySynergy.length > 0 ? mySynergy : data.synergy).slice(0, 6);
 
   return (
     <div className="space-y-6">
@@ -42,7 +51,11 @@ export default function TradeMatrixPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Highest-synergy pairings</CardTitle>
+          <CardTitle>
+            {myRosterId !== null && mySynergy.length > 0
+              ? `Best trade partners for ${teamName(myRosterId)}`
+              : "Highest-synergy pairings"}
+          </CardTitle>
           <CardDescription>
             Complementary needs and divergent competitive windows.
           </CardDescription>
@@ -69,7 +82,7 @@ export default function TradeMatrixPage() {
         <h2 className="mb-4 text-lg font-semibold tracking-tight">
           Auto-generated proposals
         </h2>
-        <ProposalList analytics={data} />
+        <ProposalList analytics={data} focusRosterId={myRosterId} />
       </section>
 
       <section>
@@ -77,7 +90,7 @@ export default function TradeMatrixPage() {
         <h2 className="mb-4 text-lg font-semibold tracking-tight">
           Manual trade builder
         </h2>
-        <TradeBuilder analytics={data} />
+        <TradeBuilder analytics={data} myRosterId={myRosterId} />
       </section>
     </div>
   );

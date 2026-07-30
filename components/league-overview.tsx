@@ -1,10 +1,11 @@
 "use client";
 
+import { useParams } from "next/navigation";
 import { Badge, WINDOW_STYLES } from "@/components/ui/badge";
 import type { TeamProfile } from "@/lib/types/dynasty";
 import { formatPct, formatValue } from "@/lib/utils";
 import { lineupEfficiency } from "@/lib/math/max-pf";
-import { useDynastyStore } from "@/lib/store";
+import { useDynastyStore, useMyRosterId } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 /**
@@ -13,7 +14,9 @@ import { cn } from "@/lib/utils";
  * competitive-window classification.
  */
 export function LeagueOverview({ teams }: { teams: TeamProfile[] }) {
-  const { myRosterId, setMyRoster } = useDynastyStore();
+  const { leagueId } = useParams<{ leagueId: string }>();
+  const myRosterId = useMyRosterId(leagueId);
+  const setMyRoster = useDynastyStore((s) => s.setMyRoster);
   const sorted = [...teams].sort((a, b) => b.totalValue - a.totalValue);
   const maxValue = sorted[0]?.totalValue ?? 1;
 
@@ -41,7 +44,9 @@ export function LeagueOverview({ teams }: { teams: TeamProfile[] }) {
             return (
               <tr
                 key={team.roster.rosterId}
-                onClick={() => setMyRoster(isMine ? null : team.roster.rosterId)}
+                onClick={() =>
+                  leagueId && setMyRoster(leagueId, isMine ? null : team.roster.rosterId)
+                }
                 className={cn(
                   "cursor-pointer border-b border-white/5 transition-colors hover:bg-surface-2/70",
                   isMine && "bg-accent/[0.08]",

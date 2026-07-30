@@ -18,10 +18,12 @@ export function MdiCard({
   result,
   index,
   ownerName,
+  isMine = false,
 }: {
   result: SerializedMdiResult;
   index: number;
   ownerName?: string;
+  isMine?: boolean;
 }) {
   const { asset, engineValue, marketValue, mdi, signal } = result;
   const player = isPlayerAsset(asset) ? asset : null;
@@ -33,7 +35,10 @@ export function MdiCard({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, delay: Math.min(index * 0.02, 0.3) }}
-      className="panel flex items-center gap-4 px-4 py-3 transition-colors hover:border-white/20"
+      className={cn(
+        "panel flex items-center gap-4 px-4 py-3 transition-colors hover:border-white/20",
+        isMine && "border-accent/35 bg-accent/[0.04]",
+      )}
     >
       <span className="w-7 shrink-0 font-mono text-xs text-ink-muted">
         {String(index + 1).padStart(2, "0")}
@@ -55,7 +60,17 @@ export function MdiCard({
         </div>
         <p className="mt-1 font-mono text-[11px] tabular-nums text-ink-muted">
           eng {formatValue(engineValue)} · mkt {formatValue(marketValue)}
-          {ownerName && <span className="font-sans"> · held by {ownerName}</span>}
+          {ownerName && (
+            <span className="font-sans">
+              {" "}
+              · held by {ownerName}
+              {isMine && (
+                <span className="ml-1 font-semibold uppercase text-accent-bright">
+                  (you)
+                </span>
+              )}
+            </span>
+          )}
         </p>
       </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeftRight, Scale } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -14,14 +14,34 @@ import { cn, formatPct, formatValue } from "@/lib/utils";
  * get a live market-balance read. Asset values come from the same
  * consensus feed the MDI board uses.
  */
-export function TradeBuilder({ analytics }: { analytics: LeagueAnalytics }) {
+export function TradeBuilder({
+  analytics,
+  myRosterId = null,
+}: {
+  analytics: LeagueAnalytics;
+  myRosterId?: number | null;
+}) {
   const teams = analytics.teams;
   const first = teams[0]?.roster.rosterId ?? 0;
   const second = teams[1]?.roster.rosterId ?? 0;
-  const [rosterA, setRosterA] = useState<number>(first);
-  const [rosterB, setRosterB] = useState<number>(second);
+  const [rosterA, setRosterA] = useState<number>(myRosterId ?? first);
+  const [rosterB, setRosterB] = useState<number>(
+    myRosterId !== null && myRosterId === second ? first : second,
+  );
   const [selectedA, setSelectedA] = useState<Set<string>>(new Set());
   const [selectedB, setSelectedB] = useState<Set<string>>(new Set());
+
+  // Follow the global team selector: your side of the desk is side A.
+  useEffect(() => {
+    if (myRosterId === null) return;
+    setRosterA(myRosterId);
+    setSelectedA(new Set());
+    if (myRosterId === rosterB) {
+      setRosterB(myRosterId === first ? second : first);
+      setSelectedB(new Set());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myRosterId]);
 
   const assetsByRoster = useMemo(() => {
     const map = new Map<number, typeof analytics.mdi>();
@@ -163,8 +183,18 @@ function sumSelected(
     .reduce((s, a) => s + a.marketValue, 0);
 }
 
-/** Auto-generated proposals from the game-theoretic matchmaker. */
-export function ProposalList({ analytics }: { analytics: LeagueAnalytics }) {
+/**
+ * Auto-generated proposals from the game-theoretic matchmaker. When a
+ * focus roster is set, proposals involving that team are shown first (and
+ * exclusively, unless none exist).
+ */
+export function ProposalList({
+  analytics,
+  focusRosterId = null,
+}: {
+  analytics: LeagueAnalytics;
+  focusRosterId?: number | null;
+}) {
   const teamName = (rosterId: number) =>
     analytics.teams.find((t) => t.roster.rosterId === rosterId)?.roster.ownerName ??
     `Roster ${rosterId}`;
@@ -176,9 +206,24 @@ export function ProposalList({ analytics }: { analytics: LeagueAnalytics }) {
       </p>
     );
   }
+  const mine =
+    focusRosterId === null
+      ? analytics.proposals
+      : analytics.proposals.filter(
+          (p) =>
+            p.sideA.rosterId === focusRosterId || p.sideB.rosterId === focusRosterId,
+        );
+  const showingFallback = focusRosterId !== null && mine.length === 0;
+  const visible = showingFallback ? analytics.proposals : mine;
   return (
     <div className="space-y-3">
-      {analytics.proposals.map((p, i) => (
+      {showingFallback && (
+        <p className="text-sm text-ink-muted">
+          The matchmaker found no proposals involving your team this cycle —
+          showing league-wide opportunities instead.
+        </p>
+      )}
+      {visible.map((p, i) => (
         <motion.div
           key={p.id}
           initial={{ opacity: 0, y: 8 }}

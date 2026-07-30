@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { MdiCard } from "@/components/mdi-card";
 import { useLeagueAnalytics } from "@/lib/hooks";
+import { useMyRosterId } from "@/lib/store";
 import type { MdiSignal, Position } from "@/lib/types/dynasty";
 import { POSITIONS, isPlayerAsset } from "@/lib/types/dynasty";
 
@@ -19,8 +20,10 @@ const SELL_SIGNALS: MdiSignal[] = ["SELL", "STRONG_SELL"];
 export default function MdiArbitragePage() {
   const { leagueId } = useParams<{ leagueId: string }>();
   const { data, isLoading, error } = useLeagueAnalytics(leagueId ?? null);
+  const myRosterId = useMyRosterId(leagueId);
   const [signalFilter, setSignalFilter] = useState<SignalFilter>("ALL");
   const [positionFilter, setPositionFilter] = useState<PositionFilter>("ALL");
+  const [mineOnly, setMineOnly] = useState(false);
 
   const ownerByRosterId = useMemo(() => {
     if (!data) return new Map<number, string>();
@@ -30,6 +33,7 @@ export default function MdiArbitragePage() {
   const results = useMemo(() => {
     if (!data) return [];
     return data.mdi
+      .filter((r) => !mineOnly || myRosterId === null || r.rosterId === myRosterId)
       .filter((r) => {
         if (signalFilter === "BUYS") return BUY_SIGNALS.includes(r.signal);
         if (signalFilter === "SELLS") return SELL_SIGNALS.includes(r.signal);
@@ -41,7 +45,7 @@ export default function MdiArbitragePage() {
         return isPlayerAsset(r.asset) && r.asset.position === positionFilter;
       })
       .slice(0, 60);
-  }, [data, signalFilter, positionFilter]);
+  }, [data, signalFilter, positionFilter, mineOnly, myRosterId]);
 
   if (isLoading) {
     return (
@@ -101,6 +105,18 @@ export default function MdiArbitragePage() {
             {p}
           </Button>
         ))}
+        {myRosterId !== null && (
+          <>
+            <span className="mx-1 h-5 w-px bg-white/10" aria-hidden />
+            <Button
+              size="sm"
+              variant={mineOnly ? "default" : "outline"}
+              onClick={() => setMineOnly((v) => !v)}
+            >
+              MY TEAM
+            </Button>
+          </>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -112,6 +128,7 @@ export default function MdiArbitragePage() {
             ownerName={
               r.rosterId !== null ? ownerByRosterId.get(r.rosterId) : undefined
             }
+            isMine={myRosterId !== null && r.rosterId === myRosterId}
           />
         ))}
         {results.length === 0 && (

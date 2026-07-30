@@ -9,14 +9,14 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MaxPfChart } from "@/components/max-pf-chart";
 import { useLeagueAnalytics } from "@/lib/hooks";
-import { useDynastyStore } from "@/lib/store";
+import { useMyRosterId } from "@/lib/store";
 import { lineupEfficiency, tankContendPosture } from "@/lib/math/max-pf";
 import { formatPct, formatValue } from "@/lib/utils";
 
 export default function RosterOptimizerPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
   const { data, isLoading, error } = useLeagueAnalytics(leagueId ?? null);
-  const { myRosterId, setMyRoster } = useDynastyStore();
+  const myRosterId = useMyRosterId(leagueId);
 
   if (isLoading) {
     return (
@@ -62,20 +62,10 @@ export default function RosterOptimizerPage() {
       <PageHeader
         eyebrow="Max-PF optimizer"
         title="Tank vs. Contend"
-        description={`Max-PF efficiency and asset positioning for ${roster.ownerName}.`}
-        right={
-          <select
-            aria-label="Select roster"
-            className="hairline h-9 rounded-lg bg-surface-2 px-2 text-sm"
-            value={roster.rosterId}
-            onChange={(e) => setMyRoster(Number(e.target.value))}
-          >
-            {data.teams.map((t) => (
-              <option key={t.roster.rosterId} value={t.roster.rosterId}>
-                {t.roster.ownerName}
-              </option>
-            ))}
-          </select>
+        description={
+          myRosterId === null
+            ? `Max-PF efficiency and asset positioning for ${roster.ownerName} — pick your team in the header to lock focus.`
+            : `Max-PF efficiency and asset positioning for ${roster.ownerName}.`
         }
       />
 
