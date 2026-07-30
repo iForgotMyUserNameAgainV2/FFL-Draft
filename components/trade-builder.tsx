@@ -200,7 +200,37 @@ export function ProposalList({ analytics }: { analytics: LeagueAnalytics }) {
                 {formatValue(p.sideB.marketValue)}
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {[p.sideA, p.sideB].map((side, sideIdx) => (
+                  <div
+                    key={side.rosterId}
+                    className="rounded-lg border border-white/10 bg-surface-2 p-3"
+                  >
+                    <p className="mb-1.5 text-[11px] uppercase tracking-wider text-ink-muted">
+                      {teamName(side.rosterId)} sends
+                    </p>
+                    <ul className="space-y-1">
+                      {side.assets.map((asset) => (
+                        <li key={asset.id} className="flex items-center justify-between gap-2 text-sm">
+                          <span className="truncate">
+                            {isPlayerAsset(asset) ? asset.name : asset.id}
+                          </span>
+                          <span className="text-[11px] text-ink-muted">
+                            {isPlayerAsset(asset)
+                              ? `${asset.position} · ${asset.age}`
+                              : `${asset.season} R${asset.round}`}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 font-mono text-xs tabular-nums text-ink-secondary">
+                      {formatValue(sideIdx === 0 ? p.sideA.marketValue : p.sideB.marketValue)}{" "}
+                      market · +{formatValue(side.utilityDelta)} utility
+                    </p>
+                  </div>
+                ))}
+              </div>
               <p className="text-sm text-ink-secondary">{p.rationale}</p>
             </CardContent>
           </Card>

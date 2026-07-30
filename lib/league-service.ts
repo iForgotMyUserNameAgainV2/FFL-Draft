@@ -26,9 +26,11 @@ import {
   getLeague,
   getNflState,
   getRosters,
+  getSeasonMatchups,
   getTradedPicks,
   getTrimmedPlayers,
   getUsers,
+  type TrimmedPlayer,
 } from "@/lib/api/sleeper";
 import { getFantasyCalcValues } from "@/lib/api/fantasycalc";
 import { blendConsensus, getDynastyDealerValues } from "@/lib/api/dynasty-dealer";
@@ -36,9 +38,18 @@ import { computeMdiBatch, playerEngineValue } from "@/lib/math/mdi";
 import { phaseFromDate, pickEngineValue } from "@/lib/math/liquidity";
 import { remainingEliteYears } from "@/lib/math/weibull";
 import {
+  computeOptimalLineup,
   lineupEfficiency,
   tankContendPosture,
+  type ScoredPlayer,
 } from "@/lib/math/max-pf";
+import {
+  aggregateSeasonStats,
+  computeParMap,
+  replacementLevels,
+  replacementRanks,
+  type SeasonStats,
+} from "@/lib/math/par";
 import {
   generateProposals,
   positionalBalance,
@@ -47,6 +58,15 @@ import {
   type SynergyCell,
 } from "@/lib/math/trade-engine";
 
+export interface WeeklyPerformance {
+  rosterId: number;
+  week: number;
+  /** Points actually scored by the starting lineup. */
+  actual: number;
+  /** Max-PF: optimal-lineup points from the full roster that week. */
+  optimal: number;
+}
+
 export interface LeagueAnalytics {
   settings: LeagueSettings;
   phase: LeaguePhase;
@@ -54,6 +74,11 @@ export interface LeagueAnalytics {
   mdi: SerializedMdiResult[];
   synergy: SynergyCell[];
   proposals: TradeProposal[];
+  /** Whether PAR came from real weekly scoring or the rank-based estimate. */
+  parSource: "live" | "estimated";
+  /** Season the weekly stats were drawn from (null when estimated only). */
+  statsSeason: number | null;
+  weekly: WeeklyPerformance[];
 }
 
 export interface SerializedMdiResult extends Omit<MdiResult, "asset"> {
@@ -77,11 +102,19 @@ export async function buildLeagueAnalytics(leagueId: string): Promise<LeagueAnal
   const phase = phaseFromDate(new Date(), settings.week || undefined);
   const currentSeason = settings.season;
 
-  const fantasyCalc = await getFantasyCalcValues({
-    isSuperFlex: settings.isSuperFlex,
-    ppr: settings.isPpr,
-    numTeams: settings.totalRosters,
-  });
+  const [fantasyCalc, liveStats] = await Promise.all([
+    getFantasyCalcValues({
+      isSuperFlex: settings.isSuperFlex,
+      ppr: settings.isPpr,
+      numTeams: settings.totalRosters,
+    }),
+    loadSeasonStats(leagueId, league.previous_league_id, settings, nflState),
+  ]);
+
+  // Real PAR from weekly scoring when a season of data exists.
+  const parByPlayer = liveStats
+    ? buildParMap(liveStats.stats, players, settings)
+    : null;
 
   // Rank within position (for PAR estimation) from the primary source.
   const positionRanks = buildPositionRanks(fantasyCalc, players);
@@ -95,7 +128,16 @@ export async function buildLeagueAnalytics(leagueId: string): Promise<LeagueAnal
         const p = players[pid];
         if (!p || !isPosition(p.position)) return null;
         const rank = positionRanks.get(pid) ?? 60;
-        return buildPlayerAsset(pid, p.name, p.position, p.team, p.age, p.years_exp, rank);
+        return buildPlayerAsset(
+          pid,
+          p.name,
+          p.position,
+          p.team,
+          p.age,
+          p.years_exp,
+          rank,
+          parByPlayer?.get(pid) ?? null,
+        );
       })
       .filter((p): p is PlayerAsset => p !== null);
 
@@ -239,12 +281,111 @@ export async function buildLeagueAnalytics(leagueId: string): Promise<LeagueAnal
   }
   proposals.sort((a, b) => b.winWinProbability - a.winWinProbability);
 
-  return { settings, phase, teams, mdi, synergy, proposals: proposals.slice(0, 20) };
+  const weekly = liveStats
+    ? computeWeeklyPerformance(liveStats.weeks, players, settings)
+    : [];
+
+  return {
+    settings,
+    phase,
+    teams,
+    mdi,
+    synergy,
+    proposals: proposals.slice(0, 20),
+    parSource: parByPlayer ? "live" : "estimated",
+    statsSeason: liveStats?.season ?? null,
+    weekly,
+  };
 }
 
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
+
+interface LiveSeasonStats {
+  season: number;
+  stats: Map<string, SeasonStats>;
+  weeks: Awaited<ReturnType<typeof getSeasonMatchups>>;
+}
+
+/**
+ * Pull weekly matchup data for PAR and Max-PF tracking. Prefers the
+ * current season once ≥3 weeks are in the books; otherwise falls back to
+ * the previous league in the dynasty lineage (offseason case). Returns
+ * null when no scoring data exists anywhere (expansion year one).
+ */
+async function loadSeasonStats(
+  leagueId: string,
+  previousLeagueId: string | null,
+  settings: LeagueSettings,
+  nflState: { week: number; season_type: string },
+): Promise<LiveSeasonStats | null> {
+  const inSeason =
+    (nflState.season_type === "regular" || nflState.season_type === "post") &&
+    nflState.week >= 3;
+
+  const source = inSeason
+    ? { id: leagueId, season: settings.season, toWeek: Math.min(nflState.week, 17) }
+    : previousLeagueId
+      ? { id: previousLeagueId, season: settings.season - 1, toWeek: 17 }
+      : null;
+  if (!source) return null;
+
+  const weeks = await getSeasonMatchups(source.id, 1, source.toWeek).catch(
+    () => [] as Awaited<ReturnType<typeof getSeasonMatchups>>,
+  );
+  if (weeks.length === 0) return null;
+
+  const pointsMaps = weeks.flatMap(({ matchups }) =>
+    matchups.map((m) => m.players_points ?? {}),
+  );
+  return { season: source.season, stats: aggregateSeasonStats(pointsMaps), weeks };
+}
+
+function buildParMap(
+  stats: Map<string, SeasonStats>,
+  players: Record<string, TrimmedPlayer>,
+  settings: LeagueSettings,
+): Map<string, number> {
+  const positionOf = (playerId: string): Position | null => {
+    const pos = players[playerId]?.position;
+    return pos && isPosition(pos) ? pos : null;
+  };
+  const ranks = replacementRanks(settings.lineupSlots, settings.totalRosters);
+  const levels = replacementLevels(stats, positionOf, ranks);
+  return computeParMap(stats, positionOf, levels);
+}
+
+/**
+ * Week-by-week actual starter points vs the optimal (Max-PF) lineup that
+ * the roster could have fielded, using the league's real lineup slots.
+ */
+function computeWeeklyPerformance(
+  weeks: Awaited<ReturnType<typeof getSeasonMatchups>>,
+  players: Record<string, TrimmedPlayer>,
+  settings: LeagueSettings,
+): WeeklyPerformance[] {
+  const performance: WeeklyPerformance[] = [];
+  for (const { week, matchups } of weeks) {
+    for (const matchup of matchups) {
+      const pool: ScoredPlayer[] = Object.entries(matchup.players_points ?? {})
+        .map(([playerId, points]) => {
+          const pos = players[playerId]?.position;
+          if (!pos || !isPosition(pos)) return null;
+          return { playerId, position: pos, points };
+        })
+        .filter((p): p is ScoredPlayer => p !== null);
+      const { maxPoints } = computeOptimalLineup(pool, settings.lineupSlots);
+      performance.push({
+        rosterId: matchup.roster_id,
+        week,
+        actual: matchup.points,
+        optimal: Math.max(maxPoints, matchup.points),
+      });
+    }
+  }
+  return performance;
+}
 
 function toLeagueSettings(
   league: Awaited<ReturnType<typeof getLeague>>,
@@ -295,6 +436,7 @@ function buildPlayerAsset(
   age: number | null,
   yearsExp: number | null,
   positionRank: number,
+  livePar: number | null,
 ): PlayerAsset {
   const exp = yearsExp ?? 3;
   return {
@@ -305,7 +447,7 @@ function buildPlayerAsset(
     team,
     age: age ?? 26,
     yearsExp: exp,
-    par: estimatePar(position, positionRank),
+    par: livePar ?? estimatePar(position, positionRank),
     // Rookie-contract security: 4-year deals, tapering after year 4.
     contractFactor: Math.max(0.2, Math.min(1, (5 - exp) / 4)),
     // Draft-capital prior placeholder: young early-rank players carry

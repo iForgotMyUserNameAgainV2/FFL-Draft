@@ -20,6 +20,7 @@ engine, and portfolio manager.
 | Pick Liquidity & Volatility | `liquidity.ts` | Seasonal multiplier `M(t)`: 0.85× in-season cash discount → 1.25× rookie-draft premium, plus future-year discounting and slot skew |
 | Trade Matchmaker | `trade-engine.ts` | Synergy matrix `M(A,B) = f(Need_A, Surplus_B, Window_A, Window_B)`, bundle enumeration, and logistic win-win probabilities |
 | Tank vs. Contend Optimizer | `max-pf.ts` | Optimal-lineup Max-PF, lineup efficiency, and a contend score mapping to REBUILD / RETOOL / CONTEND / ALL-IN directives |
+| Points Above Replacement | `par.ts` | Real weekly scoring → season PPG, positional replacement frontiers from the league's own lineup slots, PAR = PPG − replacement |
 
 ## App surface
 
@@ -31,7 +32,10 @@ engine, and portfolio manager.
 
 ## Data sources
 
-- **Sleeper** — public read API (league, rosters, users, traded picks, players)
+- **Sleeper** — public read API (league, rosters, users, traded picks, players,
+  weekly matchups). PAR uses live weekly scoring — the current season once ≥3
+  weeks exist, otherwise the previous league in the dynasty lineage — and falls
+  back to a rank-based estimate only when no scoring history exists.
 - **FantasyCalc** — public crowd-sourced dynasty market values
 - **Dynasty Dealer** — adapter with env-configurable endpoint
   (`DYNASTY_DEALER_API_URL`, `DYNASTY_DEALER_API_KEY`); falls back to a

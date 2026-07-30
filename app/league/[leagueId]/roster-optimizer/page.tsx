@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge, WINDOW_STYLES } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MaxPfChart } from "@/components/max-pf-chart";
 import { useLeagueAnalytics } from "@/lib/hooks";
 import { useDynastyStore } from "@/lib/store";
 import { lineupEfficiency, tankContendPosture } from "@/lib/math/max-pf";
@@ -90,6 +91,20 @@ export default function RosterOptimizerPage() {
           detail={`Total value ${formatValue(team.totalValue)}`}
         />
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Actual PF vs Max-PF by week</CardTitle>
+          <CardDescription>
+            {data.statsSeason
+              ? `Weekly starter points against the optimal lineup, ${data.statsSeason} season. The gap is the start/sit leak.`
+              : "Weekly scoring data unavailable — sync again once the season starts."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <MaxPfChart weekly={data.weekly} rosterId={roster.rosterId} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

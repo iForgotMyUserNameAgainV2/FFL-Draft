@@ -39,6 +39,13 @@ import {
   generateProposals,
   type AssetValuation,
 } from "@/lib/math/trade-engine";
+import {
+  aggregateSeasonStats,
+  computeParMap,
+  replacementLevels,
+  replacementRanks,
+  startersPerPosition,
+} from "@/lib/math/par";
 import type {
   PickAsset,
   PlayerAsset,
@@ -454,5 +461,76 @@ describe("Max-PF optimizer", () => {
       efficiency: 0.8,
     });
     expect(leaky.directives.some((d) => d.includes("efficiency"))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. PAR from live weekly scoring
+// ---------------------------------------------------------------------------
+
+describe("PAR engine", () => {
+  it("aggregates weekly points into season stats, skipping zero weeks for PPG", () => {
+    const stats = aggregateSeasonStats([
+      { a: 20, b: 0, c: 8 },
+      { a: 10, b: 15, c: 12 },
+      { a: 0, b: 15 },
+    ]);
+    expect(stats.get("a")).toEqual({ totalPoints: 30, games: 2, ppg: 15 });
+    expect(stats.get("b")).toEqual({ totalPoints: 30, games: 2, ppg: 15 });
+    expect(stats.get("c")).toEqual({ totalPoints: 20, games: 2, ppg: 10 });
+  });
+
+  it("derives starters per position from lineup slots including flexes", () => {
+    const starters = startersPerPosition([
+      "QB",
+      "RB",
+      "RB",
+      "WR",
+      "WR",
+      "TE",
+      "FLEX",
+      "SUPER_FLEX",
+    ]);
+    expect(starters.QB).toBeCloseTo(1.8); // 1 + 0.8 SF share
+    expect(starters.RB).toBeGreaterThan(2); // 2 + flex shares
+    expect(starters.TE).toBeGreaterThan(1);
+  });
+
+  it("replacement ranks scale with league size and pad for churn", () => {
+    const ranks12 = replacementRanks(["QB", "RB", "RB", "WR", "WR", "TE"], 12);
+    const ranks10 = replacementRanks(["QB", "RB", "RB", "WR", "WR", "TE"], 10);
+    expect(ranks12.RB).toBe(Math.ceil(2 * 12 * 1.25));
+    expect(ranks12.RB).toBeGreaterThan(ranks10.RB);
+    expect(ranks12.QB).toBeGreaterThanOrEqual(1);
+  });
+
+  it("replacement level is the frontier player's PPG and PAR is the excess", () => {
+    // Three RBs at 20/12/6 ppg; replacement rank 2 → level = 12.
+    const stats = aggregateSeasonStats([
+      { rb1: 20, rb2: 12, rb3: 6 },
+    ]);
+    const positionOf = () => "RB" as const;
+    const levels = replacementLevels(stats, positionOf, {
+      QB: 1,
+      RB: 2,
+      WR: 1,
+      TE: 1,
+    });
+    expect(levels.RB).toBe(12);
+    const par = computeParMap(stats, positionOf, levels);
+    expect(par.get("rb1")).toBe(8);
+    expect(par.get("rb2")).toBe(0);
+    expect(par.get("rb3")).toBe(-6); // below replacement stays negative
+  });
+
+  it("returns 0 replacement level when the position pool is thinner than the rank", () => {
+    const stats = aggregateSeasonStats([{ te1: 9 }]);
+    const levels = replacementLevels(stats, () => "TE" as const, {
+      QB: 5,
+      RB: 5,
+      WR: 5,
+      TE: 5,
+    });
+    expect(levels.TE).toBe(0);
   });
 });

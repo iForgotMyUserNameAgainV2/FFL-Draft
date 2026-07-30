@@ -214,6 +214,17 @@ export interface SleeperLeague {
   roster_positions: string[];
   scoring_settings: Record<string, number>;
   settings: Record<string, number>;
+  /** Prior season's league in the dynasty lineage (null for year one). */
+  previous_league_id: string | null;
+}
+
+export interface SleeperMatchup {
+  roster_id: number;
+  matchup_id: number | null;
+  points: number;
+  players: string[] | null;
+  starters: string[] | null;
+  players_points: Record<string, number> | null;
 }
 
 export interface SleeperRoster {

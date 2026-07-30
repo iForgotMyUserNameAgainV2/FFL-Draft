@@ -63,6 +63,12 @@ export default function MdiArbitragePage() {
           scores are assets the structural model prices above the market consensus
           — acquisition targets. Sorted by |MDI|.
         </p>
+        <p className="mt-1 text-[11px] text-ink-muted">
+          PAR input:{" "}
+          {data.parSource === "live"
+            ? `live weekly scoring (${data.statsSeason} season)`
+            : "rank-based estimate (no scoring history found)"}
+        </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

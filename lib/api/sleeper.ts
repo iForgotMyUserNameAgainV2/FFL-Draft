@@ -10,6 +10,7 @@
 
 import type {
   SleeperLeague,
+  SleeperMatchup,
   SleeperNflState,
   SleeperPlayer,
   SleeperRoster,
@@ -47,6 +48,30 @@ export function getUsers(leagueId: string): Promise<SleeperUser[]> {
 
 export function getTradedPicks(leagueId: string): Promise<SleeperTradedPick[]> {
   return sleeperFetch<SleeperTradedPick[]>(`/league/${leagueId}/traded_picks`, 300);
+}
+
+export function getMatchups(leagueId: string, week: number): Promise<SleeperMatchup[]> {
+  return sleeperFetch<SleeperMatchup[]>(`/league/${leagueId}/matchups/${week}`, 3600);
+}
+
+/**
+ * Matchups for a span of weeks, fetched concurrently. Weeks that error
+ * (e.g. not yet played) resolve to empty arrays so partial seasons work.
+ */
+export async function getSeasonMatchups(
+  leagueId: string,
+  fromWeek: number,
+  toWeek: number,
+): Promise<Array<{ week: number; matchups: SleeperMatchup[] }>> {
+  const weeks: number[] = [];
+  for (let w = fromWeek; w <= toWeek; w++) weeks.push(w);
+  const results = await Promise.all(
+    weeks.map(async (week) => ({
+      week,
+      matchups: await getMatchups(leagueId, week).catch(() => [] as SleeperMatchup[]),
+    })),
+  );
+  return results.filter((r) => r.matchups.length > 0);
 }
 
 export interface TrimmedPlayer {
