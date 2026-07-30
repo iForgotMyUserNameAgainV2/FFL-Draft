@@ -5,12 +5,34 @@
  * matchmaking, Max-PF optimization) operate over these types.
  */
 
-export type Position = "QB" | "RB" | "WR" | "TE";
+/** Skill positions with meaningful aging curves and market quotes. */
+export type CorePosition = "QB" | "RB" | "WR" | "TE";
 
-export const POSITIONS: readonly Position[] = ["QB", "RB", "WR", "TE"] as const;
+/** Every rosterable position the platform models. */
+export type Position = CorePosition | "K" | "DEF";
+
+export const CORE_POSITIONS: readonly CorePosition[] = [
+  "QB",
+  "RB",
+  "WR",
+  "TE",
+] as const;
+
+export const POSITIONS: readonly Position[] = [
+  "QB",
+  "RB",
+  "WR",
+  "TE",
+  "K",
+  "DEF",
+] as const;
 
 export function isPosition(value: string): value is Position {
   return (POSITIONS as readonly string[]).includes(value);
+}
+
+export function isCorePosition(value: string): value is CorePosition {
+  return (CORE_POSITIONS as readonly string[]).includes(value);
 }
 
 /** Lineup slots supported by the Max-PF optimizer. */
@@ -19,6 +41,8 @@ export type LineupSlot =
   | "RB"
   | "WR"
   | "TE"
+  | "K"
+  | "DEF"
   | "FLEX" // RB/WR/TE
   | "SUPER_FLEX"; // QB/RB/WR/TE
 
@@ -27,6 +51,8 @@ export const FLEX_ELIGIBILITY: Record<LineupSlot, readonly Position[]> = {
   RB: ["RB"],
   WR: ["WR"],
   TE: ["TE"],
+  K: ["K"],
+  DEF: ["DEF"],
   FLEX: ["RB", "WR", "TE"],
   SUPER_FLEX: ["QB", "RB", "WR", "TE"],
 };

@@ -20,6 +20,8 @@ const POSITION_TILT: Record<Position, number> = {
   RB: 0.94, // structurally lower on aging RBs
   WR: 1.03,
   TE: 0.99,
+  K: 1.0, // no meaningful K/DEF market bias
+  DEF: 1.0,
 };
 
 export interface DealerContext {

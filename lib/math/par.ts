@@ -58,15 +58,38 @@ export const PPG_BASELINE: Record<Position, number> = {
   RB: 8,
   WR: 8,
   TE: 6,
+  K: 7.5,
+  DEF: 6.5,
 };
 
 /** Modeled positional share of flex-slot starts. */
-const FLEX_SHARE: Record<Position, number> = { QB: 0, RB: 0.35, WR: 0.5, TE: 0.15 };
-const SUPER_FLEX_SHARE: Record<Position, number> = { QB: 0.8, RB: 0.07, WR: 0.1, TE: 0.03 };
+const FLEX_SHARE: Record<Position, number> = {
+  QB: 0,
+  RB: 0.35,
+  WR: 0.5,
+  TE: 0.15,
+  K: 0,
+  DEF: 0,
+};
+const SUPER_FLEX_SHARE: Record<Position, number> = {
+  QB: 0.8,
+  RB: 0.07,
+  WR: 0.1,
+  TE: 0.03,
+  K: 0,
+  DEF: 0,
+};
 
 /** Expected starters per position per team, given the lineup slots. */
 export function startersPerPosition(slots: LineupSlot[]): Record<Position, number> {
-  const starters: Record<Position, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
+  const starters: Record<Position, number> = {
+    QB: 0,
+    RB: 0,
+    WR: 0,
+    TE: 0,
+    K: 0,
+    DEF: 0,
+  };
   for (const slot of slots) {
     if (slot === "FLEX") {
       for (const pos of POSITIONS) starters[pos] += FLEX_SHARE[pos];
@@ -104,7 +127,14 @@ export function replacementLevels(
   positionOf: (playerId: string) => Position | null,
   ranks: Record<Position, number>,
 ): Record<Position, number> {
-  const byPosition: Record<Position, number[]> = { QB: [], RB: [], WR: [], TE: [] };
+  const byPosition: Record<Position, number[]> = {
+    QB: [],
+    RB: [],
+    WR: [],
+    TE: [],
+    K: [],
+    DEF: [],
+  };
   for (const [playerId, s] of stats) {
     const pos = positionOf(playerId);
     if (pos && s.games > 0) byPosition[pos].push(s.ppg);

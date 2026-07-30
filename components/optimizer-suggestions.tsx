@@ -43,7 +43,7 @@ function startableFloor(team: TeamProfile): Map<Position, number> {
       .filter((p) => p.position === pos)
       .map(projectedPpg)
       .sort((a, b) => b - a);
-    const frontier = pos === "QB" || pos === "TE" ? 1 : 2;
+    const frontier = pos === "RB" || pos === "WR" ? 2 : 1;
     const v = ppgs[Math.min(frontier, Math.max(0, ppgs.length - 1))];
     if (v !== undefined) floor.set(pos, v);
   }

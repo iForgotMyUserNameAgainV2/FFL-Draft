@@ -82,7 +82,7 @@ export function RosterTable({
                 )}
               </td>
               <td className="py-2 pr-3 text-right font-mono text-xs tabular-nums text-ink-secondary">
-                {player.age}
+                {player.position === "DEF" ? "—" : player.age}
               </td>
               <td className="py-2 pr-3 text-right font-mono text-xs tabular-nums text-ink-secondary">
                 {player.ppg !== null ? player.ppg.toFixed(1) : "—"}

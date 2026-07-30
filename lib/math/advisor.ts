@@ -39,7 +39,14 @@ export const SELL_AGE: Record<Position, number> = {
   RB: 26,
   WR: 29,
   TE: 29,
+  K: 40, // kickers don't age out of fantasy relevance
+  DEF: 99, // team defenses don't age at all
 };
+
+/** K/DEF have no liquid dynasty trade market — never trade advice. */
+function isTradeable(position: Position): boolean {
+  return position !== "K" && position !== "DEF";
+}
 
 const WIN_NOW_WINDOWS: CompetitiveWindow[] = ["CONTEND", "ALL_IN"];
 const FUTURE_WINDOWS: CompetitiveWindow[] = ["REBUILD", "RETOOL"];
@@ -100,6 +107,7 @@ export function sellCandidates(
   for (const result of myAssets) {
     if (!isPlayerAsset(result.asset)) continue;
     const player = result.asset;
+    if (!isTradeable(player.position)) continue;
     const balance = ctx.positionalBalance[player.position] ?? 0;
     const overpriced = result.signal === "SELL" || result.signal === "STRONG_SELL";
     const aging = player.age >= SELL_AGE[player.position];
@@ -157,6 +165,7 @@ export function buyTargets(
     if (!isPlayerAsset(result.asset)) continue;
     if (result.signal !== "BUY" && result.signal !== "STRONG_BUY") continue;
     const player = result.asset;
+    if (!isTradeable(player.position)) continue;
     const balance = ctx.positionalBalance[player.position] ?? 0;
     const fillsDeficit = balance < DEFICIT;
 

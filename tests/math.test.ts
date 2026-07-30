@@ -31,6 +31,7 @@ import {
   type ScoredPlayer,
 } from "@/lib/math/max-pf";
 import {
+  baselineFromLineup,
   needFit,
   positionalBalance,
   synergyMatrix,
@@ -119,7 +120,7 @@ function teamProfile(
     winNowValue: 15000,
     futureValue: 15000,
     window,
-    positionalBalance: { QB: 0, RB: 0, WR: 0, TE: 0, ...balance },
+    positionalBalance: { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0, ...balance },
   };
 }
 
@@ -315,9 +316,9 @@ describe("Trade matchmaker", () => {
   });
 
   it("needFit measures how well surpluses cover deficits", () => {
-    const need: Record<Position, number> = { QB: -1, RB: 0, WR: 0, TE: 0 };
-    const perfectSurplus: Record<Position, number> = { QB: 2, RB: 0, WR: 0, TE: 0 };
-    const noSurplus: Record<Position, number> = { QB: 0, RB: 3, WR: 0, TE: 0 };
+    const need: Record<Position, number> = { QB: -1, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0 };
+    const perfectSurplus: Record<Position, number> = { QB: 2, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0 };
+    const noSurplus: Record<Position, number> = { QB: 0, RB: 3, WR: 0, TE: 0, K: 0, DEF: 0 };
     expect(needFit(need, perfectSurplus)).toBe(1);
     expect(needFit(need, noSurplus)).toBe(0);
   });
@@ -601,6 +602,8 @@ describe("PAR engine", () => {
       RB: 2,
       WR: 1,
       TE: 1,
+      K: 1,
+      DEF: 1,
     });
     expect(levels.RB).toBe(12);
     const par = computeParMap(stats, positionOf, levels);
@@ -616,6 +619,8 @@ describe("PAR engine", () => {
       RB: 5,
       WR: 5,
       TE: 5,
+      K: 5,
+      DEF: 5,
     });
     expect(levels.TE).toBe(0);
   });
@@ -646,11 +651,11 @@ describe("Advisor sanity layer", () => {
 
   const contender: AdviceContext = {
     window: "CONTEND",
-    positionalBalance: { QB: 1.2, RB: 0.1, WR: -1.0, TE: -0.2 },
+    positionalBalance: { QB: 1.2, RB: 0.1, WR: -1.0, TE: -0.2, K: 0, DEF: 0 },
   };
   const rebuilder: AdviceContext = {
     window: "REBUILD",
-    positionalBalance: { QB: 0, RB: 0.5, WR: -0.5, TE: 0 },
+    positionalBalance: { QB: 0, RB: 0.5, WR: -0.5, TE: 0, K: 0, DEF: 0 },
   };
 
   it("never tells a contender to sell into their own positional hole", () => {
@@ -755,5 +760,74 @@ describe("Advisor sanity layer", () => {
     expect(ranked[0]!.player.id).toBe("young-fa");
     expect(ranked[0]!.reason).toContain("hole"); // WR deficit for this team
     expect(ranked[1]!.player.id).toBe("old-fa");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. League-rule awareness (K/DEF and format-derived baselines)
+// ---------------------------------------------------------------------------
+
+describe("League rules: K/DEF and format-aware baselines", () => {
+  it("optimal lineup fills K and DEF slots (regression: never drop them)", () => {
+    const pool: ScoredPlayer[] = [
+      { playerId: "qb", position: "QB", points: 20 },
+      { playerId: "k1", position: "K", points: 9 },
+      { playerId: "k2", position: "K", points: 7 },
+      { playerId: "def", position: "DEF", points: 8 },
+    ];
+    const { lineup, maxPoints } = computeOptimalLineup(pool, ["QB", "K", "DEF"]);
+    expect(maxPoints).toBe(20 + 9 + 8);
+    expect(lineup.find((l) => l.slot === "K")?.player?.playerId).toBe("k1");
+    expect(lineup.find((l) => l.slot === "DEF")?.player?.playerId).toBe("def");
+  });
+
+  it("K/DEF never leak into FLEX or SUPER_FLEX", () => {
+    const pool: ScoredPlayer[] = [
+      { playerId: "k1", position: "K", points: 30 },
+      { playerId: "def", position: "DEF", points: 30 },
+      { playerId: "rb", position: "RB", points: 5 },
+      { playerId: "qb", position: "QB", points: 6 },
+    ];
+    const { lineup } = computeOptimalLineup(pool, ["FLEX", "SUPER_FLEX"]);
+    expect(lineup[0]?.player?.playerId).toBe("rb");
+    expect(lineup[1]?.player?.playerId).toBe("qb");
+  });
+
+  it("positional baselines derive from the league's actual lineup slots", () => {
+    const superflex = baselineFromLineup(
+      startersPerPosition(["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "SUPER_FLEX", "K", "DEF"]),
+    );
+    const oneQb = baselineFromLineup(
+      startersPerPosition(["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF"]),
+    );
+    // Superflex leagues demand nearly two startable QBs; 1QB leagues don't.
+    expect(superflex.QB).toBeGreaterThan(oneQb.QB + 0.5);
+    // K/DEF requirements register so rosters aren't penalized for carrying them.
+    expect(superflex.K).toBeCloseTo(1.2);
+    expect(superflex.DEF).toBeCloseTo(1.2);
+    // A league without K slots expects zero kickers.
+    const noK = baselineFromLineup(startersPerPosition(["QB", "RB", "WR", "TE"]));
+    expect(noK.K).toBe(0);
+  });
+
+  it("advisor never proposes trading kickers or defenses", () => {
+    const ctx: AdviceContext = {
+      window: "REBUILD",
+      positionalBalance: { QB: 0, RB: 0, WR: 0, TE: 0, K: 1, DEF: 1 },
+    };
+    const oldKicker = player({ id: "k", position: "K", age: 41 });
+    const def = player({ id: "d", position: "DEF", age: 26 });
+    const asResult = (p: PlayerAsset): SerializedMdiResult => ({
+      asset: p,
+      engineValue: 1000,
+      marketValue: 2000,
+      sigma: 500,
+      mdi: -2,
+      signal: "STRONG_SELL",
+      rosterId: 1,
+    });
+    expect(sellCandidates([asResult(oldKicker), asResult(def)], ctx)).toHaveLength(0);
+    const buyable = { ...asResult(def), mdi: 2, signal: "STRONG_BUY" as const, rosterId: 2 };
+    expect(buyTargets([buyable], ctx)).toHaveLength(0);
   });
 });

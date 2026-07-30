@@ -15,7 +15,7 @@
  * through age 33+.
  */
 
-import type { Position } from "@/lib/types/dynasty";
+import type { CorePosition, Position } from "@/lib/types/dynasty";
 
 export interface WeibullParams {
   /** Scale parameter eta — characteristic elite-decay age (years). */
@@ -29,6 +29,8 @@ export const WEIBULL_PARAMS: Record<Position, WeibullParams> = {
   RB: { eta: 27.8, beta: 8.5 }, // sharp decay past age 26
   WR: { eta: 31.0, beta: 7.0 }, // gradual decline, cliff ~30-32
   TE: { eta: 31.5, beta: 7.5 }, // late breakouts, holds through early 30s
+  K: { eta: 43.0, beta: 8.0 }, // kickers play forever
+  DEF: { eta: 200, beta: 1.0 }, // team defenses don't age
 };
 
 /** Age floor: survival is treated as 1 for ages at or below this. */
@@ -120,12 +122,13 @@ export function ageValueMultiplier(age: number, position: Position): number {
 
 /**
  * Survival curve samples for charting: [{ age, QB, RB, WR, TE }].
+ * Core skill positions only — K/DEF aging is flat and not chart-worthy.
  */
 export function survivalCurveSeries(
   fromAge = 21,
   toAge = 40,
-): Array<{ age: number } & Record<Position, number>> {
-  const series: Array<{ age: number } & Record<Position, number>> = [];
+): Array<{ age: number } & Record<CorePosition, number>> {
+  const series: Array<{ age: number } & Record<CorePosition, number>> = [];
   for (let age = fromAge; age <= toAge; age++) {
     series.push({
       age,

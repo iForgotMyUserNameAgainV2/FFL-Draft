@@ -52,9 +52,11 @@ import {
   computeParMap,
   replacementLevels,
   replacementRanks,
+  startersPerPosition,
   type SeasonStats,
 } from "@/lib/math/par";
 import {
+  baselineFromLineup,
   generateProposals,
   positionalBalance,
   synergyMatrix,
@@ -124,6 +126,11 @@ export function assembleAnalytics(input: AssemblyInput): LeagueAnalytics {
   } = input;
   const currentSeason = settings.season;
 
+  // League-rule-aware positional baseline: surplus/deficit is measured
+  // against what THIS league's lineup actually requires (superflex, 3-WR,
+  // K/DEF, etc.), not a generic format.
+  const leagueBaseline = baselineFromLineup(startersPerPosition(settings.lineupSlots));
+
   // --- team profiles -----------------------------------------------------
   const leagueTotals = rosters.map((r) =>
     [...r.players, ...r.picks].reduce((s, a) => s + marketValueOf(a), 0),
@@ -171,16 +178,20 @@ export function assembleAnalytics(input: AssemblyInput): LeagueAnalytics {
       winNowValue,
       futureValue,
       window: posture.window,
-      positionalBalance: positionalBalance(playerValues),
+      positionalBalance: positionalBalance(playerValues, undefined, leagueBaseline),
     };
   });
 
   // --- MDI across the whole league ---------------------------------------
+  // K/DEF have no liquid market to arbitrage — they belong on rosters and
+  // in lineups, but not on the MDI board.
   const allAssets = teams.flatMap((t) => [
-    ...t.roster.players.map((p) => ({
-      asset: p as PlayerAsset | PickAsset,
-      rosterId: t.roster.rosterId,
-    })),
+    ...t.roster.players
+      .filter((p) => p.position !== "K" && p.position !== "DEF")
+      .map((p) => ({
+        asset: p as PlayerAsset | PickAsset,
+        rosterId: t.roster.rosterId,
+      })),
     ...t.roster.picks.map((p) => ({
       asset: p as PlayerAsset | PickAsset,
       rosterId: t.roster.rosterId,
@@ -362,7 +373,15 @@ export async function buildLeagueAnalytics(leagueId: string): Promise<LeagueAnal
   const consensus = blendConsensus([fantasyCalc, dealer]);
 
   const marketValueOf = (asset: PlayerAsset | PickAsset): number => {
-    if (asset.kind === "player") return consensus.get(asset.id)?.value ?? 0;
+    if (asset.kind === "player") {
+      const quoted = consensus.get(asset.id)?.value;
+      if (quoted !== undefined) return quoted;
+      // K/DEF (and deep roster-cloggers) have no market quotes — price
+      // them at engine value so rosters stay complete and totals honest.
+      return asset.position === "K" || asset.position === "DEF"
+        ? Math.round(playerEngineValue(asset))
+        : 0;
+    }
     // Picks trade on the liquidity curve; use engine value as market proxy
     // until a pick-quote source is wired.
     return pickEngineValue(asset, phase, currentSeason);
@@ -508,9 +527,10 @@ function toLeagueSettings(
   const lineupSlots = rawSlots
     .map((s): LineupSlot | null => {
       if (s === "QB" || s === "RB" || s === "WR" || s === "TE") return s;
-      if (s === "FLEX") return "FLEX";
+      if (s === "K" || s === "DEF") return s;
+      if (s === "FLEX" || s === "WRRB_FLEX" || s === "REC_FLEX") return "FLEX";
       if (s === "SUPER_FLEX") return "SUPER_FLEX";
-      return null; // bench, taxi, IDP not part of the offensive lineup model
+      return null; // bench, taxi, IR, IDP not part of the lineup model yet
     })
     .filter((s): s is LineupSlot => s !== null);
   return {
@@ -533,8 +553,22 @@ function toLeagueSettings(
  * weekly scoring history exists.
  */
 function estimatePar(position: Position, positionRank: number): number {
-  const ceilings: Record<Position, number> = { QB: 12, RB: 10, WR: 10, TE: 8 };
-  const replacementRank: Record<Position, number> = { QB: 18, RB: 28, WR: 38, TE: 14 };
+  const ceilings: Record<Position, number> = {
+    QB: 12,
+    RB: 10,
+    WR: 10,
+    TE: 8,
+    K: 3,
+    DEF: 5,
+  };
+  const replacementRank: Record<Position, number> = {
+    QB: 18,
+    RB: 28,
+    WR: 38,
+    TE: 14,
+    K: 14,
+    DEF: 14,
+  };
   const ceiling = ceilings[position];
   const repl = replacementRank[position];
   const par = ceiling * (1 - Math.log(positionRank) / Math.log(repl + 6));
