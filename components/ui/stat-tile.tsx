@@ -12,7 +12,7 @@ export function StatTile({
   detail,
 }: {
   icon?: LucideIcon;
-  label: string;
+  label: ReactNode;
   value: ReactNode;
   detail?: ReactNode;
 }) {

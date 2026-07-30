@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { Badge, WINDOW_STYLES } from "@/components/ui/badge";
+import { Term } from "@/components/ui/term";
 import type { TeamProfile } from "@/lib/types/dynasty";
 import { formatPct, formatValue } from "@/lib/utils";
 import { lineupEfficiency } from "@/lib/math/max-pf";
@@ -28,11 +29,19 @@ export function LeagueOverview({ teams }: { teams: TeamProfile[] }) {
             <th className="microlabel py-2 pr-2 font-semibold">#</th>
             <th className="microlabel py-2 pr-3 font-semibold">Team</th>
             <th className="microlabel py-2 pr-3 font-semibold">Record</th>
-            <th className="microlabel py-2 pr-3 text-right font-semibold">Total value</th>
+            <th className="microlabel py-2 pr-3 text-right font-semibold">
+              <Term k="totalValue">Total value</Term>
+            </th>
             <th className="microlabel w-32 py-2 pr-3 font-semibold" aria-hidden />
-            <th className="microlabel py-2 pr-3 text-right font-semibold">Win-now</th>
-            <th className="microlabel py-2 pr-3 text-right font-semibold">Eff.</th>
-            <th className="microlabel py-2 font-semibold">Window</th>
+            <th className="microlabel py-2 pr-3 text-right font-semibold">
+              <Term k="winNow">Win-now</Term>
+            </th>
+            <th className="microlabel py-2 pr-3 text-right font-semibold">
+              <Term k="efficiency">Eff.</Term>
+            </th>
+            <th className="microlabel py-2 font-semibold">
+              <Term k="window">Window</Term>
+            </th>
           </tr>
         </thead>
         <tbody>

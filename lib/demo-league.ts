@@ -120,6 +120,27 @@ const DEPTH_FIRST = ["Tre", "Marcus", "Deon", "Jalen", "Xavier", "Kadarius", "Ra
 const DEPTH_LAST = ["Whitfield", "Calloway", "Bankston", "Merriweather", "Slade", "Okonkwo", "Vandergriff", "Toliver", "Renfrow", "Beckwith", "Larkin", "Dupree"];
 const NFL_TEAMS = ["DEN", "SEA", "TB", "NO", "CAR", "TEN", "CLE", "NYG", "MIN", "DAL", "JAX", "WAS"];
 
+/** One kicker + one team defense per demo roster (K/DEF slots exist). */
+const KICKERS = [
+  "Brandon Aubrey", "Justin Tucker", "Cameron Dicker", "Jake Bates",
+  "Harrison Butker", "Younghoe Koo", "Tyler Bass", "Evan McPherson",
+  "Cairo Santos", "Jason Sanders", "Chris Boswell", "Wil Lutz",
+];
+const DEFENSES = [
+  { id: "SF", name: "San Francisco 49ers" },
+  { id: "BAL", name: "Baltimore Ravens" },
+  { id: "PIT", name: "Pittsburgh Steelers" },
+  { id: "DAL", name: "Dallas Cowboys" },
+  { id: "NYJ", name: "New York Jets" },
+  { id: "CLE", name: "Cleveland Browns" },
+  { id: "BUF", name: "Buffalo Bills" },
+  { id: "KC", name: "Kansas City Chiefs" },
+  { id: "PHI", name: "Philadelphia Eagles" },
+  { id: "DET", name: "Detroit Lions" },
+  { id: "HOU", name: "Houston Texans" },
+  { id: "DEN", name: "Denver Broncos" },
+];
+
 function buildDepthPool(rand: () => number): SeedPlayer[] {
   const mix: Position[] = ["RB", "WR", "WR", "TE", "QB", "RB", "WR", "TE"];
   // Unique first/last combinations via a coprime stride through the
@@ -157,7 +178,7 @@ export function buildDemoAnalytics(now = new Date()): LeagueAnalytics {
     isSuperFlex: true,
     isPpr: true,
     isTePremium: false,
-    lineupSlots: ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "SUPER_FLEX"],
+    lineupSlots: ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "SUPER_FLEX", "K", "DEF"],
     season,
     week: 0,
   };
@@ -199,6 +220,39 @@ export function buildDemoAnalytics(now = new Date()): LeagueAnalytics {
       return asset;
     });
 
+    // Every roster carries one kicker and one team defense.
+    const kicker: PlayerAsset = {
+      kind: "player",
+      id: `demo-${rosterId}-k`,
+      name: KICKERS[idx]!,
+      position: "K",
+      team: NFL_TEAMS[idx % NFL_TEAMS.length]!,
+      age: 24 + Math.floor(rand() * 10),
+      yearsExp: 4,
+      par: (rand() - 0.3) * 2,
+      ppg: Number((7 + rand() * 3).toFixed(1)),
+      contractFactor: 0.5,
+      draftCapital: 0.1,
+    };
+    const defSeed = DEFENSES[idx]!;
+    const defense: PlayerAsset = {
+      kind: "player",
+      id: `demo-${rosterId}-def`,
+      name: defSeed.name,
+      position: "DEF",
+      team: defSeed.id,
+      age: 26,
+      yearsExp: 0,
+      par: (rand() - 0.3) * 3,
+      ppg: Number((6 + rand() * 4).toFixed(1)),
+      contractFactor: 0.5,
+      draftCapital: 0.1,
+    };
+    for (const special of [kicker, defense]) {
+      marketValues.set(special.id, Math.round(playerEngineValue(special)));
+      players.push(special);
+    }
+
     // Starters: the optimal lineup with two deliberate leaks (a benched
     // riser and an over-started veteran) so the start/sit advisor has
     // something real to find in every demo roster.
@@ -207,9 +261,7 @@ export function buildDemoAnalytics(now = new Date()): LeagueAnalytics {
       position: p.position,
       points: p.ppg ?? 0,
     }));
-    const optimal = computeOptimalLineup(pool, [
-      "QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX", "SUPER_FLEX",
-    ]);
+    const optimal = computeOptimalLineup(pool, settings.lineupSlots);
     const starterIds = optimal.lineup
       .map((e) => e.player?.playerId)
       .filter((sid): sid is string => !!sid);

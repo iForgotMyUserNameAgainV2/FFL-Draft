@@ -89,7 +89,12 @@ export function MdiCard({
       </div>
 
       <div className="w-24 shrink-0 text-right">
-        <span className="font-mono text-sm font-bold tabular-nums">{formatMdi(mdi)}</span>
+        <span
+          className="cursor-help font-mono text-sm font-bold tabular-nums"
+          title={`MDI ${formatMdi(mdi)}: engine values this asset at ${formatValue(engineValue)} vs a market price of ${formatValue(marketValue)}. ${mdi > 0 ? "Positive = underpriced (buy)." : mdi < 0 ? "Negative = overpriced (sell)." : "Fairly priced."}`}
+        >
+          {formatMdi(mdi)}
+        </span>
         <div className="mt-1">
           <Badge className={SIGNAL_STYLES[signal]}>{signal.replace("_", " ")}</Badge>
         </div>

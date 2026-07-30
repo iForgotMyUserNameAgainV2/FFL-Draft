@@ -85,6 +85,8 @@ export interface TrimmedPlayer {
 
 /**
  * Full NFL player dictionary, trimmed to the fields the engines use.
+ * Includes kickers and team defenses (DEF entries are keyed by team
+ * abbreviation, e.g. "SF", with the city/nickname as first/last name).
  * Cached for 24h — Sleeper asks that this endpoint be called at most
  * once per day.
  */
@@ -96,12 +98,12 @@ export async function getTrimmedPlayers(): Promise<Record<string, TrimmedPlayer>
   const trimmed: Record<string, TrimmedPlayer> = {};
   for (const [id, p] of Object.entries(raw)) {
     const position = p.position ?? "";
-    if (!["QB", "RB", "WR", "TE"].includes(position)) continue;
+    if (!["QB", "RB", "WR", "TE", "K", "DEF"].includes(position)) continue;
     trimmed[id] = {
       player_id: id,
       name: p.full_name ?? `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim(),
       position,
-      team: p.team ?? null,
+      team: p.team ?? (position === "DEF" ? id : null),
       age: p.age ?? null,
       years_exp: p.years_exp ?? null,
     };

@@ -30,13 +30,34 @@ import { POSITIONS, isPickAsset, isPlayerAsset } from "@/lib/types/dynasty";
 // Needs & surpluses
 // ---------------------------------------------------------------------------
 
-/** Starter-quality baseline per position for a 12-team single-QB league. */
+/**
+ * Fallback starter-quality baseline (12-team single-QB league). Callers
+ * should pass a baseline derived from the league's ACTUAL lineup slots —
+ * see `baselineFromLineup` — so superflex, 3-WR, and K/DEF formats value
+ * positions the way that league actually plays.
+ */
 const STARTER_BASELINE: Record<Position, number> = {
   QB: 1.2,
   RB: 2.5,
   WR: 3.0,
   TE: 1.2,
+  K: 1.0,
+  DEF: 1.0,
 };
+
+/**
+ * League-rule-aware baseline: the league's expected starters per position
+ * (from its real lineup slots) padded 20% for bye/injury depth.
+ */
+export function baselineFromLineup(
+  startersPerPos: Record<Position, number>,
+): Record<Position, number> {
+  const baseline = {} as Record<Position, number>;
+  for (const pos of POSITIONS) {
+    baseline[pos] = (startersPerPos[pos] ?? 0) * 1.2;
+  }
+  return baseline;
+}
 
 /**
  * Positional balance: (startable players rostered - league baseline),

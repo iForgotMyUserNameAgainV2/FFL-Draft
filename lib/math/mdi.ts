@@ -60,6 +60,8 @@ export const PAR_CEILING: Record<Position, number> = {
   RB: 10,
   WR: 10,
   TE: 8,
+  K: 3,
+  DEF: 5,
 };
 
 function clamp01(x: number): number {

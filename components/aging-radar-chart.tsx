@@ -14,12 +14,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { Position, TeamProfile } from "@/lib/types/dynasty";
-import { POSITIONS } from "@/lib/types/dynasty";
+import type { CorePosition, TeamProfile } from "@/lib/types/dynasty";
+import { CORE_POSITIONS } from "@/lib/types/dynasty";
 import { remainingEliteYears, survivalCurveSeries } from "@/lib/math/weibull";
 
 /** Validated categorical series colors (dark-surface steps): QB, RB, WR, TE. */
-export const POSITION_COLORS: Record<Position, string> = {
+export const POSITION_COLORS: Record<CorePosition, string> = {
   QB: "var(--color-series-qb)",
   RB: "var(--color-series-rb)",
   WR: "var(--color-series-wr)",
@@ -48,7 +48,7 @@ export function AgingRadarChart({
   team: TeamProfile;
   league: TeamProfile[];
 }) {
-  const data = POSITIONS.map((pos) => ({
+  const data = CORE_POSITIONS.map((pos) => ({
     position: pos,
     team: meanRemainingYears(team, pos),
     league:
@@ -96,7 +96,7 @@ export function AgingRadarChart({
   );
 }
 
-function meanRemainingYears(team: TeamProfile, pos: Position): number {
+function meanRemainingYears(team: TeamProfile, pos: CorePosition): number {
   const players = team.roster.players.filter((p) => p.position === pos);
   if (players.length === 0) return 0;
   return (
@@ -137,7 +137,7 @@ export function SurvivalCurvesChart() {
           labelFormatter={(age) => `Age ${age}`}
         />
         <Legend wrapperStyle={{ fontSize: 12, color: CHART_INK }} />
-        {POSITIONS.map((pos) => (
+        {CORE_POSITIONS.map((pos) => (
           <Line
             key={pos}
             type="monotone"

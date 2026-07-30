@@ -10,10 +10,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MaxPfChart } from "@/components/max-pf-chart";
 import { RosterTable } from "@/components/roster-table";
 import {
+  ActionPlanCard,
   StartSitCard,
   TradeAnglesCard,
   WaiverTargetsCard,
 } from "@/components/optimizer-suggestions";
+import { Term } from "@/components/ui/term";
 import { ProposalList } from "@/components/trade-builder";
 import { useLeagueAnalytics } from "@/lib/hooks";
 import { useMyRosterId } from "@/lib/store";
@@ -85,19 +87,27 @@ export default function RosterOptimizerPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
           icon={Crosshair}
-          label="Posture"
+          label={<Term k="window">Posture</Term>}
           value={<Badge className={WINDOW_STYLES[posture.window]}>{posture.window}</Badge>}
-          detail={`Contend score ${posture.contendScore.toFixed(2)}`}
+          detail={
+            <>
+              <Term k="contendScore">Contend score</Term> {posture.contendScore.toFixed(2)}
+            </>
+          }
         />
         <StatTile
           icon={Zap}
           label="Points for"
           value={<span className="font-mono">{roster.pointsFor.toFixed(1)}</span>}
-          detail={`Max-PF ${roster.maxPointsFor.toFixed(1)}`}
+          detail={
+            <>
+              <Term k="maxPf">Max-PF</Term> {roster.maxPointsFor.toFixed(1)}
+            </>
+          }
         />
         <StatTile
           icon={Gauge}
-          label="Lineup efficiency"
+          label={<Term k="efficiency">Lineup efficiency</Term>}
           value={
             <span className="font-mono">
               {roster.maxPointsFor > 0 ? formatPct(efficiency, 1) : "—"}
@@ -107,11 +117,13 @@ export default function RosterOptimizerPage() {
         />
         <StatTile
           icon={Landmark}
-          label="Asset percentile"
+          label={<Term k="assetPercentile">Asset percentile</Term>}
           value={<span className="font-mono">{formatPct(valuePercentile)}</span>}
           detail={`Total value ${formatValue(team.totalValue)}`}
         />
       </div>
+
+      <ActionPlanCard team={team} analytics={data} />
 
       <Card>
         <CardHeader>
