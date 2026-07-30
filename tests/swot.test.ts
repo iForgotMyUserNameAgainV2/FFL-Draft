@@ -335,6 +335,24 @@ describe("SWOT engine", () => {
     expect(["C", "D"]).toContain(report.grade);
   });
 
+  it("keeps position acronyms capitalized and uses real ordinals in the verdict", () => {
+    // 4-team league, one team below mine → 1/3 → 33rd percentile.
+    const team = teamProfile(1, "RETOOL", {
+      totalValue: 20000,
+      positionalBalance: { WR: -1 },
+    });
+    const league = [
+      team,
+      teamProfile(2, "REBUILD", { totalValue: 10000 }),
+      teamProfile(3, "CONTEND", { totalValue: 40000 }),
+      teamProfile(4, "CONTEND", { totalValue: 50000 }),
+    ];
+    const report = buildSwotReport(baseInput(team, league));
+    expect(report.verdict).toContain("33rd percentile");
+    expect(report.verdict).toContain("WR room is a deficit");
+    expect(report.verdict).not.toContain("wR");
+  });
+
   it("summarizes the biggest edge and liability in the verdict", () => {
     const team = teamProfile(1, "CONTEND", {
       totalValue: 60000,

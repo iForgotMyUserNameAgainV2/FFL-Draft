@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { StatTile } from "@/components/ui/stat-tile";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LeagueOverview } from "@/components/league-overview";
+import { YourTeamBanner } from "@/components/your-team-banner";
 import { AgingRadarChart, SurvivalCurvesChart } from "@/components/aging-radar-chart";
 import { useLeagueAnalytics } from "@/lib/hooks";
 import { useMyRosterId } from "@/lib/store";
@@ -53,6 +54,10 @@ export default function DashboardPage() {
           data.settings.isSuperFlex ? "superflex" : "1QB"
         } · ${data.settings.isPpr ? "PPR" : "non-PPR"} · ${data.settings.season} season`}
       />
+
+      {myTeam && leagueId && (
+        <YourTeamBanner team={myTeam} analytics={data} leagueId={leagueId} />
+      )}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatTile

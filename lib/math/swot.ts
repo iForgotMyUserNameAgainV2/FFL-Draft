@@ -593,9 +593,19 @@ function top(items: SwotItem[]): SwotItem[] {
 }
 
 function ordinalPct(p: number): string {
-  return `${Math.round(p * 100)}th`;
+  const n = Math.round(p * 100);
+  const mod100 = n % 100;
+  const suffix =
+    mod100 >= 11 && mod100 <= 13
+      ? "th"
+      : { 1: "st", 2: "nd", 3: "rd" }[n % 10] ?? "th";
+  return `${n}${suffix}`;
 }
 
+/** Lowercase a leading capital unless the word is an acronym (e.g. "WR"). */
 function lowerFirst(s: string): string {
+  if (s.length > 1 && s[1] === s[1]?.toUpperCase() && /[A-Z]/.test(s[1] ?? "")) {
+    return s;
+  }
   return s.charAt(0).toLowerCase() + s.slice(1);
 }
