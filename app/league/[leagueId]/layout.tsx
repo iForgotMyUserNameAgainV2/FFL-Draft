@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { Command, LayoutDashboard, Scale, TrendingUp, Trophy } from "lucide-react";
+import { Command, LayoutDashboard, Scale, TrendingUp, Trophy, UserCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { TeamSelector } from "@/components/team-selector";
 import { useLeagueAnalytics } from "@/lib/hooks";
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { slug: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { slug: "your-team", label: "Your Team", icon: UserCircle2 },
   { slug: "mdi-arbitrage", label: "MDI Arbitrage", icon: TrendingUp },
   { slug: "trade-matrix", label: "Trade Matrix", icon: Scale },
   { slug: "roster-optimizer", label: "Optimizer", icon: Trophy },
