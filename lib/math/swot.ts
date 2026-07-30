@@ -27,7 +27,7 @@ import type {
   TradeProposal,
   WaiverCandidate,
 } from "@/lib/types/dynasty";
-import { POSITIONS, isPlayerAsset } from "@/lib/types/dynasty";
+import { CORE_POSITIONS, POSITIONS, isPlayerAsset } from "@/lib/types/dynasty";
 import { PHASE_MULTIPLIERS } from "@/lib/math/liquidity";
 import { lineupEfficiency } from "@/lib/math/max-pf";
 import { remainingEliteYears } from "@/lib/math/weibull";
@@ -160,8 +160,9 @@ function collectStrengths(
     );
   }
 
-  // Positional surpluses, with the players that create them.
-  for (const pos of POSITIONS) {
+  // Positional surpluses, with the players that create them. Only core
+  // positions: a spare kicker or defense is not trade ammunition.
+  for (const pos of CORE_POSITIONS) {
     const balance = team.positionalBalance[pos] ?? 0;
     if (balance < BALANCE_EDGE) continue;
     const best = playersAt(team, pos, valueOf).slice(0, 2);
@@ -230,19 +231,23 @@ function collectWeaknesses(
   const item = (title: string, detail: string, score: number) =>
     items.push({ category: "WEAKNESS", title, detail, score });
 
-  // Positional deficits.
+  // Positional deficits. K/DEF deficits are real but the fix is the
+  // waiver wire, not the trade market.
   for (const pos of POSITIONS) {
     const balance = team.positionalBalance[pos] ?? 0;
     if (balance > -BALANCE_EDGE) continue;
+    const streamable = pos === "K" || pos === "DEF";
     const best = playersAt(team, pos, valueOf)[0];
     item(
       `${pos} room is a deficit`,
       `${balance.toFixed(2)} startable ${pos}s vs the league baseline${
-        best
+        best && !streamable
           ? ` — ${best.name} is carrying the room alone`
-          : ` — no startable ${pos} on the roster`
-      }. Every week starts in a hole here.`,
-      0.6 + Math.min(0.3, -balance * 0.15),
+          : streamable
+            ? ""
+            : ` — no startable ${pos} on the roster`
+      }. ${streamable ? "Stream the position off waivers until it stops bleeding points." : "Every week starts in a hole here."}`,
+      streamable ? 0.4 : 0.6 + Math.min(0.3, -balance * 0.15),
     );
   }
 

@@ -75,7 +75,7 @@ function teamProfile(
     winNowValue: 15000,
     futureValue: 15000,
     window,
-    positionalBalance: { QB: 0, RB: 0, WR: 0, TE: 0, ...positionalBalance },
+    positionalBalance: { QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0, ...positionalBalance },
     ...rest,
   };
 }
@@ -333,6 +333,21 @@ describe("SWOT engine", () => {
     // A broke, unbalanced, inefficient roster autopsies badly.
     expect(report.weaknesses.length).toBeGreaterThanOrEqual(4);
     expect(["C", "D"]).toContain(report.grade);
+  });
+
+  it("treats K/DEF deficits as streaming problems and never as trade ammunition", () => {
+    const team = teamProfile(1, "CONTEND", {
+      positionalBalance: { K: -1, DEF: 2 },
+    });
+    const report = buildSwotReport(baseInput(team, [team]));
+
+    const kDeficit = report.weaknesses.find((w) => w.title === "K room is a deficit");
+    expect(kDeficit).toBeDefined();
+    expect(kDeficit?.detail).toContain("Stream the position off waivers");
+    // A surplus of defenses is not a tradeable strength.
+    expect(
+      report.strengths.some((s) => s.title === "DEF room is a surplus"),
+    ).toBe(false);
   });
 
   it("keeps position acronyms capitalized and uses real ordinals in the verdict", () => {
