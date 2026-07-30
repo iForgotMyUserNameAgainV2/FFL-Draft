@@ -48,6 +48,16 @@ import {
   replacementRanks,
   startersPerPosition,
 } from "@/lib/math/par";
+import {
+  buyTargets,
+  filterStartSit,
+  rankWaivers,
+  sellCandidates,
+  START_SIT_MATERIALITY,
+  type AdviceContext,
+} from "@/lib/math/advisor";
+import type { SerializedMdiResult } from "@/lib/league-service";
+import type { MdiSignal } from "@/lib/types/dynasty";
 import type {
   PickAsset,
   PlayerAsset,
@@ -608,5 +618,142 @@ describe("PAR engine", () => {
       TE: 5,
     });
     expect(levels.TE).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Advice sanity layer (common sense filters)
+// ---------------------------------------------------------------------------
+
+describe("Advisor sanity layer", () => {
+  function mdiResult(
+    p: PlayerAsset,
+    signal: MdiSignal,
+    mdi: number,
+    marketValue: number,
+    rosterId: number,
+  ): SerializedMdiResult {
+    return {
+      asset: p,
+      engineValue: marketValue + mdi * 1000,
+      marketValue,
+      sigma: 1000,
+      mdi,
+      signal,
+      rosterId,
+    };
+  }
+
+  const contender: AdviceContext = {
+    window: "CONTEND",
+    positionalBalance: { QB: 1.2, RB: 0.1, WR: -1.0, TE: -0.2 },
+  };
+  const rebuilder: AdviceContext = {
+    window: "REBUILD",
+    positionalBalance: { QB: 0, RB: 0.5, WR: -0.5, TE: 0 },
+  };
+
+  it("never tells a contender to sell into their own positional hole", () => {
+    const wr1 = player({ id: "wr1", position: "WR", age: 26 });
+    const sells = sellCandidates(
+      [mdiResult(wr1, "STRONG_SELL", -1.4, 6700, 1)],
+      contender,
+    );
+    // WR balance is -1.0: overpriced or not, a contender keeps their WR1.
+    expect(sells).toHaveLength(0);
+  });
+
+  it("lets a contender sell overpriced surplus", () => {
+    const qb3 = player({ id: "qb3", position: "QB", age: 27 });
+    const sells = sellCandidates([mdiResult(qb3, "SELL", -0.6, 3000, 1)], contender);
+    expect(sells).toHaveLength(1);
+    expect(sells[0]!.reason).toContain("Surplus");
+  });
+
+  it("tells a rebuilder to move aging veterans even at fair prices", () => {
+    const oldRb = player({ id: "rb-old", position: "RB", age: 28 });
+    const sells = sellCandidates([mdiResult(oldRb, "HOLD", 0.1, 2500, 1)], rebuilder);
+    expect(sells).toHaveLength(1);
+    expect(sells[0]!.reason).toContain("28-year-old");
+  });
+
+  it("rebuilders are never pointed at players older than 25", () => {
+    const vet = player({ id: "vet", position: "WR", age: 29 });
+    const young = player({ id: "young", position: "WR", age: 23 });
+    const buys = buyTargets(
+      [
+        mdiResult(vet, "STRONG_BUY", 1.8, 5000, 2),
+        mdiResult(young, "BUY", 0.6, 4000, 3),
+      ],
+      rebuilder,
+    );
+    expect(buys.map((b) => b.player.id)).toEqual(["young"]);
+  });
+
+  it("contenders are never pointed at post-cliff veterans", () => {
+    const cliffRb = player({ id: "cliff", position: "RB", age: 27 }); // ≥ SELL_AGE.RB
+    const primeWr = player({ id: "prime", position: "WR", age: 26, ppg: 14 });
+    const buys = buyTargets(
+      [
+        mdiResult(cliffRb, "STRONG_BUY", 2.0, 3000, 2),
+        mdiResult(primeWr, "BUY", 0.5, 5000, 3),
+      ],
+      contender,
+    );
+    expect(buys.map((b) => b.player.id)).toEqual(["prime"]);
+    expect(buys[0]!.reason).toContain("hole");
+  });
+
+  it("start/sit separates actionable swaps from coin flips", () => {
+    const advice = {
+      currentPoints: 100,
+      optimalPoints: 102,
+      gain: 2,
+      starts: [],
+      sits: [],
+      swaps: [
+        {
+          start: { playerId: "a", position: "RB" as const, points: 12 },
+          sit: { playerId: "b", position: "RB" as const, points: 10.2 },
+          delta: 1.8,
+        },
+        {
+          start: { playerId: "c", position: "QB" as const, points: 15.2 },
+          sit: { playerId: "d", position: "QB" as const, points: 15.0 },
+          delta: 0.2,
+        },
+      ],
+      optimal: { lineup: [], maxPoints: 102 },
+    };
+    const filtered = filterStartSit(advice);
+    expect(filtered.actionable.map((s) => s.start.playerId)).toEqual(["a"]);
+    expect(filtered.coinFlips.map((s) => s.start.playerId)).toEqual(["c"]);
+    expect(filtered.actionableGain).toBeCloseTo(1.8);
+    expect(START_SIT_MATERIALITY).toBe(1.0);
+  });
+
+  it("waiver ranking demotes old depth for rebuilders and boosts young stashes", () => {
+    const floor = new Map([["WR" as const, 9]]);
+    const projected = (p: PlayerAsset) => p.ppg ?? 5;
+    const ranked = rankWaivers(
+      [
+        {
+          player: player({ id: "old-fa", position: "WR", age: 28, ppg: 7 }),
+          marketValue: 2000,
+          trend30d: 0,
+        },
+        {
+          player: player({ id: "young-fa", position: "WR", age: 22, ppg: 6 }),
+          marketValue: 1800,
+          trend30d: 120,
+        },
+      ],
+      rebuilder,
+      floor,
+      projected,
+    );
+    expect(ranked[0]!.player.id).toBe("young-fa");
+    expect(ranked[0]!.reason).toContain("hole"); // WR deficit for this team
+    expect(ranked[1]!.player.id).toBe("old-fa");
   });
 });

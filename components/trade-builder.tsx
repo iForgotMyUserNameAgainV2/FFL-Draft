@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { ArrowLeftRight, Scale } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge, WINDOW_STYLES } from "@/components/ui/badge";
+import { Term } from "@/components/ui/term";
 import type { LeagueAnalytics } from "@/lib/league-service";
 import { isPlayerAsset } from "@/lib/types/dynasty";
 import { cn, formatPct, formatValue } from "@/lib/utils";
@@ -242,12 +243,12 @@ export function ProposalList({
                   {teamName(p.sideA.rosterId)} ⇄ {teamName(p.sideB.rosterId)}
                 </CardTitle>
                 <span className="font-mono text-sm font-bold text-status-good">
-                  {formatPct(p.winWinProbability)} win-win
+                  {formatPct(p.winWinProbability)} <Term k="winWin">win-win</Term>
                 </span>
               </div>
               <CardDescription>
-                Synergy {p.synergy.toFixed(2)} · {formatValue(p.sideA.marketValue)} ⇄{" "}
-                {formatValue(p.sideB.marketValue)}
+                <Term k="synergy">Synergy</Term> {p.synergy.toFixed(2)} ·{" "}
+                {formatValue(p.sideA.marketValue)} ⇄ {formatValue(p.sideB.marketValue)}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

@@ -5,6 +5,7 @@ import { Banknote, CalendarClock, Handshake } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatTile } from "@/components/ui/stat-tile";
+import { Term } from "@/components/ui/term";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LeagueOverview } from "@/components/league-overview";
 import { AgingRadarChart, SurvivalCurvesChart } from "@/components/aging-radar-chart";
@@ -57,11 +58,11 @@ export default function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <StatTile
           icon={CalendarClock}
-          label="League phase"
+          label={<Term k="phase">League phase</Term>}
           value={data.phase.replace("_", " ")}
           detail={
             <>
-              Pick multiplier{" "}
+              <Term k="pickMultiplier">Pick multiplier</Term>{" "}
               <span className="font-mono text-ink-secondary">
                 M(t) = {pickMultiplier.toFixed(2)}×
               </span>{" "}
@@ -71,13 +72,13 @@ export default function DashboardPage() {
         />
         <StatTile
           icon={Banknote}
-          label="Total market cap"
+          label={<Term k="marketValue">Total market cap</Term>}
           value={<span className="font-mono">{formatValue(totalMarket)}</span>}
           detail="Consensus value across all rosters and picks"
         />
         <StatTile
           icon={Handshake}
-          label="Live proposals"
+          label={<Term k="winWin">Live proposals</Term>}
           value={<span className="font-mono">{data.proposals.length}</span>}
           detail="Win-win trades cleared by the matchmaker"
         />

@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { Badge, SIGNAL_STYLES } from "@/components/ui/badge";
 import { PositionTag } from "@/components/ui/position-tag";
+import { Term } from "@/components/ui/term";
 import type { SerializedMdiResult } from "@/lib/league-service";
 import type { TeamProfile } from "@/lib/types/dynasty";
 import { POSITIONS, isPlayerAsset } from "@/lib/types/dynasty";
@@ -40,12 +41,22 @@ export function RosterTable({
           <tr className="border-b border-white/10 text-left">
             <th className="microlabel py-2 pr-3 font-semibold">Pos</th>
             <th className="microlabel py-2 pr-3 font-semibold">Player</th>
-            <th className="microlabel py-2 pr-3 font-semibold">Lineup</th>
+            <th className="microlabel py-2 pr-3 font-semibold">
+              <Term k="lineup">Lineup</Term>
+            </th>
             <th className="microlabel py-2 pr-3 text-right font-semibold">Age</th>
-            <th className="microlabel py-2 pr-3 text-right font-semibold">PPG</th>
-            <th className="microlabel py-2 pr-3 text-right font-semibold">PAR</th>
-            <th className="microlabel py-2 pr-3 text-right font-semibold">Market</th>
-            <th className="microlabel py-2 font-semibold">Signal</th>
+            <th className="microlabel py-2 pr-3 text-right font-semibold">
+              <Term k="ppg">PPG</Term>
+            </th>
+            <th className="microlabel py-2 pr-3 text-right font-semibold">
+              <Term k="par">PAR</Term>
+            </th>
+            <th className="microlabel py-2 pr-3 text-right font-semibold">
+              <Term k="marketValue">Market</Term>
+            </th>
+            <th className="microlabel py-2 font-semibold">
+              <Term k="signal">Signal</Term>
+            </th>
           </tr>
         </thead>
         <tbody>
