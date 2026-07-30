@@ -8,29 +8,32 @@ import { useDynastyStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 /**
- * League table: every roster's asset value, win-now vs future split,
- * lineup efficiency, and competitive-window classification.
+ * League table: every roster's asset value (with an inline bar scaled to
+ * the league leader), win-now vs future split, lineup efficiency, and
+ * competitive-window classification.
  */
 export function LeagueOverview({ teams }: { teams: TeamProfile[] }) {
   const { myRosterId, setMyRoster } = useDynastyStore();
   const sorted = [...teams].sort((a, b) => b.totalValue - a.totalValue);
+  const maxValue = sorted[0]?.totalValue ?? 1;
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[640px] text-sm">
+      <table className="w-full min-w-[720px] text-sm">
         <thead>
-          <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-wider text-ink-muted">
-            <th className="py-2 pr-3 font-medium">Team</th>
-            <th className="py-2 pr-3 font-medium">Record</th>
-            <th className="py-2 pr-3 text-right font-medium">Total value</th>
-            <th className="py-2 pr-3 text-right font-medium">Win-now</th>
-            <th className="py-2 pr-3 text-right font-medium">Future</th>
-            <th className="py-2 pr-3 text-right font-medium">Lineup eff.</th>
-            <th className="py-2 font-medium">Window</th>
+          <tr className="border-b border-white/10 text-left">
+            <th className="microlabel py-2 pr-2 font-semibold">#</th>
+            <th className="microlabel py-2 pr-3 font-semibold">Team</th>
+            <th className="microlabel py-2 pr-3 font-semibold">Record</th>
+            <th className="microlabel py-2 pr-3 text-right font-semibold">Total value</th>
+            <th className="microlabel w-32 py-2 pr-3 font-semibold" aria-hidden />
+            <th className="microlabel py-2 pr-3 text-right font-semibold">Win-now</th>
+            <th className="microlabel py-2 pr-3 text-right font-semibold">Eff.</th>
+            <th className="microlabel py-2 font-semibold">Window</th>
           </tr>
         </thead>
         <tbody>
-          {sorted.map((team) => {
+          {sorted.map((team, rank) => {
             const { record, pointsFor, maxPointsFor } = team.roster;
             const eff =
               maxPointsFor > 0 ? lineupEfficiency(pointsFor, maxPointsFor) : null;
@@ -40,30 +43,43 @@ export function LeagueOverview({ teams }: { teams: TeamProfile[] }) {
                 key={team.roster.rosterId}
                 onClick={() => setMyRoster(isMine ? null : team.roster.rosterId)}
                 className={cn(
-                  "cursor-pointer border-b border-white/5 transition-colors hover:bg-surface-2",
-                  isMine && "bg-accent/10",
+                  "cursor-pointer border-b border-white/5 transition-colors hover:bg-surface-2/70",
+                  isMine && "bg-accent/[0.08]",
                 )}
                 title={isMine ? "Your roster (click to unset)" : "Click to mark as your roster"}
               >
-                <td className="py-2.5 pr-3 font-medium">{team.roster.ownerName}</td>
-                <td className="py-2.5 pr-3 text-ink-secondary">
+                <td className="py-2.5 pr-2 font-mono text-xs text-ink-muted">
+                  {String(rank + 1).padStart(2, "0")}
+                </td>
+                <td className="py-2.5 pr-3 font-medium">
+                  {team.roster.ownerName}
+                  {isMine && (
+                    <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-accent-bright">
+                      you
+                    </span>
+                  )}
+                </td>
+                <td className="py-2.5 pr-3 font-mono text-xs tabular-nums text-ink-secondary">
                   {record.wins}-{record.losses}
                   {record.ties > 0 ? `-${record.ties}` : ""}
                 </td>
-                <td className="py-2.5 pr-3 text-right font-mono tabular-nums">
+                <td className="py-2.5 pr-3 text-right font-mono text-[13px] tabular-nums">
                   {formatValue(team.totalValue)}
                 </td>
-                <td className="py-2.5 pr-3 text-right font-mono tabular-nums text-ink-secondary">
+                <td className="py-2.5 pr-3">
+                  <div className="h-1 w-full overflow-hidden rounded-full bg-surface-3/80">
+                    <div
+                      className="h-full rounded-full bg-accent/70"
+                      style={{ width: `${(team.totalValue / maxValue) * 100}%` }}
+                    />
+                  </div>
+                </td>
+                <td className="py-2.5 pr-3 text-right font-mono text-xs tabular-nums text-ink-secondary">
                   {team.totalValue > 0
                     ? formatPct(team.winNowValue / team.totalValue)
                     : "—"}
                 </td>
-                <td className="py-2.5 pr-3 text-right font-mono tabular-nums text-ink-secondary">
-                  {team.totalValue > 0
-                    ? formatPct(team.futureValue / team.totalValue)
-                    : "—"}
-                </td>
-                <td className="py-2.5 pr-3 text-right font-mono tabular-nums text-ink-secondary">
+                <td className="py-2.5 pr-3 text-right font-mono text-xs tabular-nums text-ink-secondary">
                   {eff === null ? "—" : formatPct(eff, 1)}
                 </td>
                 <td className="py-2.5">
@@ -74,9 +90,9 @@ export function LeagueOverview({ teams }: { teams: TeamProfile[] }) {
           })}
         </tbody>
       </table>
-      <p className="mt-2 text-[11px] text-ink-muted">
-        Click a row to mark it as your roster. Win-now vs future split is
-        Weibull-weighted by each player&apos;s remaining elite life expectancy.
+      <p className="mt-3 text-[11px] leading-relaxed text-ink-muted">
+        Click a row to mark it as your roster. Win-now share is Weibull-weighted
+        by each player&apos;s remaining elite life expectancy; Eff. is actual PF ÷ Max-PF.
       </p>
     </div>
   );

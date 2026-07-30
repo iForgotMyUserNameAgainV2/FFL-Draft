@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { buildLeagueAnalytics } from "@/lib/league-service";
+import { buildDemoAnalytics, DEMO_LEAGUE_ID } from "@/lib/demo-league";
 
 export async function GET(request: NextRequest) {
   const leagueId = request.nextUrl.searchParams.get("leagueId");
@@ -15,7 +16,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "leagueId is required" }, { status: 400 });
   }
   try {
-    const analytics = await buildLeagueAnalytics(leagueId);
+    const analytics =
+      leagueId === DEMO_LEAGUE_ID
+        ? buildDemoAnalytics()
+        : await buildLeagueAnalytics(leagueId);
     return NextResponse.json(analytics, {
       headers: {
         "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",

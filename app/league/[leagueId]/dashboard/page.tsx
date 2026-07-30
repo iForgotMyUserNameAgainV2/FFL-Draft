@@ -1,7 +1,10 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import { Banknote, CalendarClock, Handshake } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LeagueOverview } from "@/components/league-overview";
 import { AgingRadarChart, SurvivalCurvesChart } from "@/components/aging-radar-chart";
@@ -18,7 +21,12 @@ export default function DashboardPage() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-20 w-2/3" />
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+        </div>
         <Skeleton className="h-96 w-full" />
       </div>
     );
@@ -37,30 +45,41 @@ export default function DashboardPage() {
   const pickMultiplier = PHASE_MULTIPLIERS[data.phase];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{data.settings.name}</h1>
-        <p className="mt-1 text-xs text-ink-muted">
-          {data.settings.totalRosters} teams · {data.settings.isSuperFlex ? "Superflex" : "1QB"} ·{" "}
-          {data.settings.isPpr ? "PPR" : "non-PPR"} · season {data.settings.season}
-        </p>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Command dashboard"
+        title={data.settings.name}
+        description={`${data.settings.totalRosters}-team ${
+          data.settings.isSuperFlex ? "superflex" : "1QB"
+        } · ${data.settings.isPpr ? "PPR" : "non-PPR"} · ${data.settings.season} season`}
+      />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatTile
+          icon={CalendarClock}
           label="League phase"
           value={data.phase.replace("_", " ")}
-          detail={`Pick multiplier M(t) = ${pickMultiplier.toFixed(2)}×`}
+          detail={
+            <>
+              Pick multiplier{" "}
+              <span className="font-mono text-ink-secondary">
+                M(t) = {pickMultiplier.toFixed(2)}×
+              </span>{" "}
+              — {pickMultiplier > 1 ? "picks trading rich" : "picks at a discount"}
+            </>
+          }
         />
         <StatTile
+          icon={Banknote}
           label="Total market cap"
-          value={formatValue(totalMarket)}
+          value={<span className="font-mono">{formatValue(totalMarket)}</span>}
           detail="Consensus value across all rosters and picks"
         />
         <StatTile
+          icon={Handshake}
           label="Live proposals"
-          value={String(data.proposals.length)}
-          detail="Win-win trades found by the matchmaker"
+          value={<span className="font-mono">{data.proposals.length}</span>}
+          detail="Win-win trades cleared by the matchmaker"
         />
       </div>
 
@@ -68,7 +87,7 @@ export default function DashboardPage() {
         <CardHeader>
           <CardTitle>League portfolio table</CardTitle>
           <CardDescription>
-            Asset values, Weibull win-now/future splits, and competitive windows.
+            Asset values, Weibull win-now / future splits, and competitive windows.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -103,17 +122,5 @@ export default function DashboardPage() {
         </Card>
       </div>
     </div>
-  );
-}
-
-function StatTile({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return (
-    <Card>
-      <CardContent className="p-5">
-        <p className="text-[11px] uppercase tracking-wider text-ink-muted">{label}</p>
-        <p className="mt-1 text-2xl font-bold">{value}</p>
-        <p className="mt-1 text-xs text-ink-muted">{detail}</p>
-      </CardContent>
-    </Card>
   );
 }

@@ -34,6 +34,7 @@ import {
   positionalBalance,
   synergyMatrix,
   synergyScore,
+  tradeScale,
   windowComplementarity,
   winWinProbability,
   generateProposals,
@@ -329,6 +330,16 @@ describe("Trade matchmaker", () => {
     for (let i = 1; i < matrix.length; i++) {
       expect(matrix[i - 1]!.synergy).toBeGreaterThanOrEqual(matrix[i]!.synergy);
     }
+  });
+
+  it("trade scale grows with trade size so probabilities never saturate", () => {
+    expect(tradeScale(1200, 1100)).toBe(300); // floor for small swaps
+    expect(tradeScale(20000, 18000)).toBeCloseTo(4000);
+    // The same absolute utility edge means less on a bigger trade.
+    const small = winWinProbability(800, 800, tradeScale(3000, 3000));
+    const big = winWinProbability(800, 800, tradeScale(30000, 30000));
+    expect(small).toBeGreaterThan(big);
+    expect(big).toBeLessThan(0.9); // no blanket 100% win-win
   });
 
   it("win-win probability is symmetric-ish, bounded, and monotone in gains", () => {

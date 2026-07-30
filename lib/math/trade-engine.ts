@@ -191,6 +191,10 @@ export function bundleUtility(
  * Win-win probability via a smooth logistic over both sides' utility
  * gains. A trade where both teams gain need-weighted utility relative to
  * what they give up approaches 1; a lopsided trade approaches 0.
+ *
+ * `scale` is the utility gain that maps to ~73% acceptance for one side.
+ * Use `tradeScale` to derive it from trade size — a +500 utility edge is
+ * decisive on a 2,000-value swap and noise on a 20,000-value blockbuster.
  */
 export function winWinProbability(
   utilityGainA: number,
@@ -200,6 +204,16 @@ export function winWinProbability(
   const pA = logistic(utilityGainA / scale);
   const pB = logistic(utilityGainB / scale);
   return pA * pB;
+}
+
+/**
+ * Logistic scale proportional to trade size (20% of the bigger side).
+ * The proportion encodes manager skepticism: even a clearly favorable
+ * blockbuster carries acceptance risk, so probabilities top out around
+ * ~90% rather than saturating at 100%.
+ */
+export function tradeScale(valueA: number, valueB: number): number {
+  return Math.max(300, 0.2 * Math.max(valueA, valueB));
 }
 
 function logistic(x: number): number {
@@ -242,7 +256,11 @@ export function generateProposals(
       const utilityDeltaB = bundleUtility(bundleA, teamB) - bundleUtility(bundleB, teamB);
       if (utilityDeltaA <= 0 || utilityDeltaB <= 0) continue;
 
-      const probability = winWinProbability(utilityDeltaA, utilityDeltaB);
+      const probability = winWinProbability(
+        utilityDeltaA,
+        utilityDeltaB,
+        tradeScale(valueA, valueB),
+      );
       const synergy = synergyScore(teamA, teamB);
       proposals.push({
         id: proposalId(teamA, teamB, bundleA, bundleB),

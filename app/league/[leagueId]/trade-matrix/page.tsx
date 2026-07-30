@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProposalList, TradeBuilder } from "@/components/trade-builder";
 import { useLeagueAnalytics } from "@/lib/hooks";
@@ -33,13 +34,11 @@ export default function TradeMatrixPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Trade Matrix</h1>
-        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-ink-muted">
-          Pairwise synergy M(A,B) = f(Need, Surplus, Windows) across all rosters.
-          High-synergy pairs feed the proposal generator below.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Game-theoretic matchmaking"
+        title="Trade Matrix"
+        description="Pairwise synergy M(A,B) = f(Need, Surplus, Windows) across all rosters. High-synergy pairs feed the proposal generator below."
+      />
 
       <Card>
         <CardHeader>
@@ -65,15 +64,21 @@ export default function TradeMatrixPage() {
         </CardContent>
       </Card>
 
-      <div>
-        <h2 className="mb-3 text-lg font-semibold">Auto-generated proposals</h2>
+      <section>
+        <p className="microlabel mb-1 text-accent-bright">Matchmaker output</p>
+        <h2 className="mb-4 text-lg font-semibold tracking-tight">
+          Auto-generated proposals
+        </h2>
         <ProposalList analytics={data} />
-      </div>
+      </section>
 
-      <div>
-        <h2 className="mb-3 text-lg font-semibold">Manual trade builder</h2>
+      <section>
+        <p className="microlabel mb-1 text-accent-bright">Negotiation desk</p>
+        <h2 className="mb-4 text-lg font-semibold tracking-tight">
+          Manual trade builder
+        </h2>
         <TradeBuilder analytics={data} />
-      </div>
+      </section>
     </div>
   );
 }

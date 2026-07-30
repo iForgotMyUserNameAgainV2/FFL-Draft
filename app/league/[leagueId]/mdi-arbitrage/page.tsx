@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { MdiCard } from "@/components/mdi-card";
 import { useLeagueAnalytics } from "@/lib/hooks";
 import type { MdiSignal, Position } from "@/lib/types/dynasty";
@@ -20,6 +21,11 @@ export default function MdiArbitragePage() {
   const { data, isLoading, error } = useLeagueAnalytics(leagueId ?? null);
   const [signalFilter, setSignalFilter] = useState<SignalFilter>("ALL");
   const [positionFilter, setPositionFilter] = useState<PositionFilter>("ALL");
+
+  const ownerByRosterId = useMemo(() => {
+    if (!data) return new Map<number, string>();
+    return new Map(data.teams.map((t) => [t.roster.rosterId, t.roster.ownerName]));
+  }, [data]);
 
   const results = useMemo(() => {
     if (!data) return [];
@@ -40,8 +46,9 @@ export default function MdiArbitragePage() {
   if (isLoading) {
     return (
       <div className="space-y-3">
+        <Skeleton className="h-20 w-2/3" />
         {Array.from({ length: 8 }).map((_, i) => (
-          <Skeleton key={i} className="h-20 w-full" />
+          <Skeleton key={i} className="h-16 w-full" />
         ))}
       </div>
     );
@@ -55,21 +62,22 @@ export default function MdiArbitragePage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">MDI Arbitrage Board</h1>
-        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-ink-muted">
-          MDI = (V<sub>engine</sub> − V<sub>market</sub>) / σ<sub>position</sub>. Positive
-          scores are assets the structural model prices above the market consensus
-          — acquisition targets. Sorted by |MDI|.
-        </p>
-        <p className="mt-1 text-[11px] text-ink-muted">
-          PAR input:{" "}
-          {data.parSource === "live"
-            ? `live weekly scoring (${data.statsSeason} season)`
-            : "rank-based estimate (no scoring history found)"}
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Market sentiment arbitrage"
+        title="MDI Arbitrage Board"
+        description={
+          <>
+            MDI = (V<sub>engine</sub> − V<sub>market</sub>) / σ<sub>position</sub>.
+            Positive scores are assets the structural model prices above market
+            consensus — acquisition targets. Sorted by |MDI|. PAR input:{" "}
+            {data.parSource === "live"
+              ? `live weekly scoring (${data.statsSeason} season)`
+              : "rank-based estimate (no scoring history found)"}
+            .
+          </>
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         {(["ALL", "BUYS", "SELLS"] as const).map((f) => (
@@ -97,7 +105,14 @@ export default function MdiArbitragePage() {
 
       <div className="space-y-2">
         {results.map((r, i) => (
-          <MdiCard key={r.asset.id + String(r.rosterId)} result={r} index={i} />
+          <MdiCard
+            key={r.asset.id + String(r.rosterId)}
+            result={r}
+            index={i}
+            ownerName={
+              r.rosterId !== null ? ownerByRosterId.get(r.rosterId) : undefined
+            }
+          />
         ))}
         {results.length === 0 && (
           <p className="text-sm text-ink-muted">No assets match the current filters.</p>

@@ -2,15 +2,15 @@
 
 @theme {
   /* Dark terminal surfaces */
-  --color-surface-page: #0d0d0d;
-  --color-surface-1: #18181b;
-  --color-surface-2: #212124;
-  --color-surface-3: #2c2c2f;
+  --color-surface-page: #0a0a0c;
+  --color-surface-1: #141417;
+  --color-surface-2: #1c1c21;
+  --color-surface-3: #26262c;
 
   /* Ink */
-  --color-ink-primary: #ffffff;
-  --color-ink-secondary: #c3c2b7;
-  --color-ink-muted: #898781;
+  --color-ink-primary: #f4f4f2;
+  --color-ink-secondary: #b9b8ae;
+  --color-ink-muted: #85847d;
 
   /* Chart chrome */
   --color-grid: #2c2c2a;
@@ -29,20 +29,66 @@
   --color-status-critical: #d03b3b;
 
   --color-accent: #3987e5;
+  --color-accent-bright: #6da7ec;
 
-  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 html {
   color-scheme: dark;
+  scrollbar-color: var(--color-surface-3) transparent;
 }
 
 body {
   background-color: var(--color-surface-page);
   color: var(--color-ink-primary);
   font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+  /* Faint command-desk glow behind the top of every page. */
+  background-image:
+    radial-gradient(1100px 480px at 50% -180px, rgba(57, 135, 229, 0.13), transparent 70%),
+    radial-gradient(700px 340px at 85% -120px, rgba(25, 158, 112, 0.05), transparent 70%);
+  background-repeat: no-repeat;
 }
 
 ::selection {
   background: rgba(57, 135, 229, 0.35);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-3);
+  border-radius: 8px;
+  border: 2px solid var(--color-surface-page);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Hairline utility — 1px borders that read on dark surfaces. */
+@utility hairline {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Panel: the standard elevated card surface. */
+@utility panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 42%),
+    var(--color-surface-1);
+  border-radius: 0.875rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* Micro label: uppercase eyebrow text used across the app. */
+@utility microlabel {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--color-ink-muted);
 }

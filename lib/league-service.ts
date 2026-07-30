@@ -1,15 +1,18 @@
 /**
  * League assembly service (server-side).
  *
- * Pulls raw Sleeper league data and market quotes, then materializes the
- * engine-ready domain objects: player/pick assets, consensus values, team
- * profiles, MDI results, the synergy matrix, and auto-generated trade
- * proposals. This is the single computation entry point behind
- * /api/market.
+ * Two layers:
+ *  - `assembleAnalytics` — pure engine assembly: given rosters with assets,
+ *    a market-value function, and weekly performance, it materializes team
+ *    profiles, the MDI board, the synergy matrix, and trade proposals.
+ *  - `buildLeagueAnalytics` — the Sleeper-backed entry point behind
+ *    /api/market that feeds real league data into the assembly.
+ *
+ * The split lets the demo league (and future data sources) reuse the exact
+ * engine pipeline the live path runs.
  */
 
 import type {
-  CompetitiveWindow,
   LeaguePhase,
   LeagueSettings,
   LineupSlot,
@@ -88,6 +91,153 @@ export interface SerializedMdiResult extends Omit<MdiResult, "asset"> {
 
 const PICK_SEASONS_AHEAD = 3;
 
+// ---------------------------------------------------------------------------
+// Engine assembly (data-source agnostic)
+// ---------------------------------------------------------------------------
+
+export interface AssemblyInput {
+  settings: LeagueSettings;
+  phase: LeaguePhase;
+  /** Rosters with player and pick assets already populated. */
+  rosters: TeamRoster[];
+  /** Consensus market value for any asset. */
+  marketValueOf: (asset: PlayerAsset | PickAsset) => number;
+  parSource: "live" | "estimated";
+  statsSeason: number | null;
+  weekly: WeeklyPerformance[];
+}
+
+export function assembleAnalytics(input: AssemblyInput): LeagueAnalytics {
+  const { settings, phase, rosters, marketValueOf, parSource, statsSeason, weekly } =
+    input;
+  const currentSeason = settings.season;
+
+  // --- team profiles -----------------------------------------------------
+  const leagueTotals = rosters.map((r) =>
+    [...r.players, ...r.picks].reduce((s, a) => s + marketValueOf(a), 0),
+  );
+  const sortedTotals = [...leagueTotals].sort((a, b) => a - b);
+
+  const teams: TeamProfile[] = rosters.map((roster, idx) => {
+    const playerValues = roster.players.map((p) => ({
+      position: p.position,
+      value: marketValueOf(p),
+      winNowShare: winNowShare(p),
+    }));
+    const pickValues = roster.picks.map((pk) => marketValueOf(pk));
+
+    const playersTotal = playerValues.reduce((s, v) => s + v.value, 0);
+    const picksTotal = pickValues.reduce((s, v) => s + v, 0);
+    const totalValue = playersTotal + picksTotal;
+    const winNowValue = playerValues.reduce((s, v) => s + v.value * v.winNowShare, 0);
+    const futureValue = totalValue - winNowValue;
+
+    const total = leagueTotals[idx] ?? 0;
+    const valuePercentile =
+      sortedTotals.length <= 1
+        ? 0.5
+        : sortedTotals.findIndex((v) => v >= total) / (sortedTotals.length - 1);
+
+    const games =
+      roster.record.wins + roster.record.losses + roster.record.ties;
+    const winPct = games > 0 ? roster.record.wins / games : 0.5;
+    const efficiency =
+      roster.maxPointsFor > 0
+        ? lineupEfficiency(roster.pointsFor, roster.maxPointsFor)
+        : 1;
+
+    const posture = tankContendPosture({
+      valuePercentile,
+      winNowShare: totalValue > 0 ? winNowValue / totalValue : 0.5,
+      winPct,
+      efficiency,
+    });
+
+    return {
+      roster,
+      totalValue,
+      winNowValue,
+      futureValue,
+      window: posture.window,
+      positionalBalance: positionalBalance(playerValues),
+    };
+  });
+
+  // --- MDI across the whole league ---------------------------------------
+  const allAssets = teams.flatMap((t) => [
+    ...t.roster.players.map((p) => ({
+      asset: p as PlayerAsset | PickAsset,
+      rosterId: t.roster.rosterId,
+    })),
+    ...t.roster.picks.map((p) => ({
+      asset: p as PlayerAsset | PickAsset,
+      rosterId: t.roster.rosterId,
+    })),
+  ]);
+  const mdiInput = allAssets.map(({ asset }) => ({
+    asset,
+    marketValue: marketValueOf(asset),
+  }));
+  const rosterIdByAsset = new Map(
+    allAssets.map(({ asset, rosterId }) => [asset.id, rosterId]),
+  );
+  const mdi = computeMdiBatch(mdiInput, phase, currentSeason).map((r) => ({
+    ...r,
+    rosterId: rosterIdByAsset.get(r.asset.id) ?? null,
+  }));
+
+  // --- synergy + proposals -----------------------------------------------
+  const synergy = synergyMatrix(teams);
+  const valuationsByRoster = new Map<number, AssetValuation[]>(
+    teams.map((t) => [
+      t.roster.rosterId,
+      [...t.roster.players, ...t.roster.picks].map((asset) => ({
+        asset,
+        marketValue: marketValueOf(asset),
+        engineValue:
+          asset.kind === "player"
+            ? playerEngineValue(asset)
+            : pickEngineValue(asset, phase, currentSeason),
+        winNowShare: asset.kind === "player" ? winNowShare(asset) : 0,
+      })),
+    ]),
+  );
+
+  const teamById = new Map(teams.map((t) => [t.roster.rosterId, t]));
+  const proposals: TradeProposal[] = [];
+  for (const cell of synergy.slice(0, 8)) {
+    const teamA = teamById.get(cell.rosterIdA);
+    const teamB = teamById.get(cell.rosterIdB);
+    if (!teamA || !teamB) continue;
+    proposals.push(
+      ...generateProposals(
+        teamA,
+        teamB,
+        valuationsByRoster.get(cell.rosterIdA) ?? [],
+        valuationsByRoster.get(cell.rosterIdB) ?? [],
+        { maxProposals: 3 },
+      ),
+    );
+  }
+  proposals.sort((a, b) => b.winWinProbability - a.winWinProbability);
+
+  return {
+    settings,
+    phase,
+    teams,
+    mdi,
+    synergy,
+    proposals: proposals.slice(0, 20),
+    parSource,
+    statsSeason,
+    weekly,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Sleeper-backed entry point
+// ---------------------------------------------------------------------------
+
 export async function buildLeagueAnalytics(leagueId: string): Promise<LeagueAnalytics> {
   const [league, rosters, users, tradedPicks, players, nflState] = await Promise.all([
     getLeague(leagueId),
@@ -116,7 +266,7 @@ export async function buildLeagueAnalytics(leagueId: string): Promise<LeagueAnal
     ? buildParMap(liveStats.stats, players, settings)
     : null;
 
-  // Rank within position (for PAR estimation) from the primary source.
+  // Rank within position (for the estimate fallback) from the primary source.
   const positionRanks = buildPositionRanks(fantasyCalc, players);
 
   const userById = new Map(users.map((u) => [u.user_id, u]));
@@ -180,122 +330,19 @@ export async function buildLeagueAnalytics(leagueId: string): Promise<LeagueAnal
     return pickEngineValue(asset, phase, currentSeason);
   };
 
-  // --- team profiles -----------------------------------------------------
-  const leagueTotals = rosterAssets.map((r) =>
-    [...r.players, ...r.picks].reduce((s, a) => s + marketValueOf(a), 0),
-  );
-  const sortedTotals = [...leagueTotals].sort((a, b) => a - b);
-
-  const teams: TeamProfile[] = rosterAssets.map((roster, idx) => {
-    const playerValues = roster.players.map((p) => ({
-      position: p.position,
-      value: marketValueOf(p),
-      winNowShare: winNowShare(p),
-    }));
-    const pickValues = roster.picks.map((pk) => marketValueOf(pk));
-
-    const playersTotal = playerValues.reduce((s, v) => s + v.value, 0);
-    const picksTotal = pickValues.reduce((s, v) => s + v, 0);
-    const totalValue = playersTotal + picksTotal;
-    const winNowValue = playerValues.reduce((s, v) => s + v.value * v.winNowShare, 0);
-    const futureValue = totalValue - winNowValue;
-
-    const total = leagueTotals[idx] ?? 0;
-    const valuePercentile =
-      sortedTotals.length <= 1
-        ? 0.5
-        : sortedTotals.findIndex((v) => v >= total) / (sortedTotals.length - 1);
-
-    const games =
-      roster.record.wins + roster.record.losses + roster.record.ties;
-    const winPct = games > 0 ? roster.record.wins / games : 0.5;
-    const efficiency =
-      roster.maxPointsFor > 0
-        ? lineupEfficiency(roster.pointsFor, roster.maxPointsFor)
-        : 1;
-
-    const posture = tankContendPosture({
-      valuePercentile,
-      winNowShare: totalValue > 0 ? winNowValue / totalValue : 0.5,
-      winPct,
-      efficiency,
-    });
-
-    return {
-      roster,
-      totalValue,
-      winNowValue,
-      futureValue,
-      window: posture.window,
-      positionalBalance: positionalBalance(playerValues),
-    };
-  });
-
-  // --- MDI across the whole league ---------------------------------------
-  const allAssets = teams.flatMap((t) => [
-    ...t.roster.players.map((p) => ({ asset: p as PlayerAsset | PickAsset, rosterId: t.roster.rosterId })),
-    ...t.roster.picks.map((p) => ({ asset: p as PlayerAsset | PickAsset, rosterId: t.roster.rosterId })),
-  ]);
-  const mdiInput = allAssets.map(({ asset }) => ({
-    asset,
-    marketValue: marketValueOf(asset),
-  }));
-  const rosterIdByAsset = new Map(allAssets.map(({ asset, rosterId }) => [asset.id, rosterId]));
-  const mdi = computeMdiBatch(mdiInput, phase, currentSeason).map((r) => ({
-    ...r,
-    rosterId: rosterIdByAsset.get(r.asset.id) ?? null,
-  }));
-
-  // --- synergy + proposals -----------------------------------------------
-  const synergy = synergyMatrix(teams);
-  const valuationsByRoster = new Map<number, AssetValuation[]>(
-    teams.map((t) => [
-      t.roster.rosterId,
-      [...t.roster.players, ...t.roster.picks].map((asset) => ({
-        asset,
-        marketValue: marketValueOf(asset),
-        engineValue:
-          asset.kind === "player"
-            ? playerEngineValue(asset)
-            : pickEngineValue(asset, phase, currentSeason),
-        winNowShare: asset.kind === "player" ? winNowShare(asset) : 0,
-      })),
-    ]),
-  );
-
-  const teamById = new Map(teams.map((t) => [t.roster.rosterId, t]));
-  const proposals: TradeProposal[] = [];
-  for (const cell of synergy.slice(0, 8)) {
-    const teamA = teamById.get(cell.rosterIdA);
-    const teamB = teamById.get(cell.rosterIdB);
-    if (!teamA || !teamB) continue;
-    proposals.push(
-      ...generateProposals(
-        teamA,
-        teamB,
-        valuationsByRoster.get(cell.rosterIdA) ?? [],
-        valuationsByRoster.get(cell.rosterIdB) ?? [],
-        { maxProposals: 3 },
-      ),
-    );
-  }
-  proposals.sort((a, b) => b.winWinProbability - a.winWinProbability);
-
   const weekly = liveStats
     ? computeWeeklyPerformance(liveStats.weeks, players, settings)
     : [];
 
-  return {
+  return assembleAnalytics({
     settings,
     phase,
-    teams,
-    mdi,
-    synergy,
-    proposals: proposals.slice(0, 20),
+    rosters: rosterAssets,
+    marketValueOf,
     parSource: parByPlayer ? "live" : "estimated",
     statsSeason: liveStats?.season ?? null,
     weekly,
-  };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -416,8 +463,8 @@ function toLeagueSettings(
 /**
  * PAR estimate from consensus positional rank: an exponential-decay
  * archetype curve calibrated so Pos1 ≈ position ceiling and PosN falls
- * to replacement (0) around the startable frontier. Placeholder until
- * weekly stat ingestion is wired in.
+ * to replacement (0) around the startable frontier. Fallback when no
+ * weekly scoring history exists.
  */
 function estimatePar(position: Position, positionRank: number): number {
   const ceilings: Record<Position, number> = { QB: 12, RB: 10, WR: 10, TE: 8 };

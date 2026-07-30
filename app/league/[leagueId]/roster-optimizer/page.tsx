@@ -1,8 +1,11 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import { Crosshair, Gauge, Landmark, Zap } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge, WINDOW_STYLES } from "@/components/ui/badge";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MaxPfChart } from "@/components/max-pf-chart";
 import { useLeagueAnalytics } from "@/lib/hooks";
@@ -56,38 +59,53 @@ export default function RosterOptimizerPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Tank vs. Contend Optimizer</h1>
-          <p className="mt-1 text-xs text-ink-muted">
-            Max-PF efficiency and asset positioning for {roster.ownerName}.
-          </p>
-        </div>
-        <select
-          aria-label="Select roster"
-          className="h-9 rounded-lg border border-white/15 bg-surface-2 px-2 text-sm"
-          value={roster.rosterId}
-          onChange={(e) => setMyRoster(Number(e.target.value))}
-        >
-          {data.teams.map((t) => (
-            <option key={t.roster.rosterId} value={t.roster.rosterId}>
-              {t.roster.ownerName}
-            </option>
-          ))}
-        </select>
-      </div>
+      <PageHeader
+        eyebrow="Max-PF optimizer"
+        title="Tank vs. Contend"
+        description={`Max-PF efficiency and asset positioning for ${roster.ownerName}.`}
+        right={
+          <select
+            aria-label="Select roster"
+            className="hairline h-9 rounded-lg bg-surface-2 px-2 text-sm"
+            value={roster.rosterId}
+            onChange={(e) => setMyRoster(Number(e.target.value))}
+          >
+            {data.teams.map((t) => (
+              <option key={t.roster.rosterId} value={t.roster.rosterId}>
+                {t.roster.ownerName}
+              </option>
+            ))}
+          </select>
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Tile label="Posture" value={<Badge className={WINDOW_STYLES[posture.window]}>{posture.window}</Badge>} detail={`Contend score ${posture.contendScore.toFixed(2)}`} />
-        <Tile label="Points for" value={roster.pointsFor.toFixed(1)} detail={`Max-PF ${roster.maxPointsFor.toFixed(1)}`} />
-        <Tile
+        <StatTile
+          icon={Crosshair}
+          label="Posture"
+          value={<Badge className={WINDOW_STYLES[posture.window]}>{posture.window}</Badge>}
+          detail={`Contend score ${posture.contendScore.toFixed(2)}`}
+        />
+        <StatTile
+          icon={Zap}
+          label="Points for"
+          value={<span className="font-mono">{roster.pointsFor.toFixed(1)}</span>}
+          detail={`Max-PF ${roster.maxPointsFor.toFixed(1)}`}
+        />
+        <StatTile
+          icon={Gauge}
           label="Lineup efficiency"
-          value={roster.maxPointsFor > 0 ? formatPct(efficiency, 1) : "—"}
+          value={
+            <span className="font-mono">
+              {roster.maxPointsFor > 0 ? formatPct(efficiency, 1) : "—"}
+            </span>
+          }
           detail="Actual PF ÷ maximum possible PF"
         />
-        <Tile
+        <StatTile
+          icon={Landmark}
           label="Asset percentile"
-          value={formatPct(valuePercentile)}
+          value={<span className="font-mono">{formatPct(valuePercentile)}</span>}
           detail={`Total value ${formatValue(team.totalValue)}`}
         />
       </div>
@@ -155,22 +173,3 @@ export default function RosterOptimizerPage() {
   );
 }
 
-function Tile({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: React.ReactNode;
-  detail: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="p-5">
-        <p className="text-[11px] uppercase tracking-wider text-ink-muted">{label}</p>
-        <div className="mt-1 text-2xl font-bold">{value}</div>
-        <p className="mt-1 text-xs text-ink-muted">{detail}</p>
-      </CardContent>
-    </Card>
-  );
-}
