@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  /* Dark terminal surfaces */
+  --color-surface-page: #0d0d0d;
+  --color-surface-1: #18181b;
+  --color-surface-2: #212124;
+  --color-surface-3: #2c2c2f;
+
+  /* Ink */
+  --color-ink-primary: #ffffff;
+  --color-ink-secondary: #c3c2b7;
+  --color-ink-muted: #898781;
+
+  /* Chart chrome */
+  --color-grid: #2c2c2a;
+  --color-baseline: #383835;
+
+  /* Validated categorical series (dark mode steps): QB, RB, WR, TE */
+  --color-series-qb: #3987e5;
+  --color-series-rb: #d95926;
+  --color-series-wr: #199e70;
+  --color-series-te: #c98500;
+
+  /* Status (reserved) */
+  --color-status-good: #0ca30c;
+  --color-status-warning: #fab219;
+  --color-status-serious: #ec835a;
+  --color-status-critical: #d03b3b;
+
+  --color-accent: #3987e5;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-surface-page);
+  color: var(--color-ink-primary);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: rgba(57, 135, 229, 0.35);
+}
