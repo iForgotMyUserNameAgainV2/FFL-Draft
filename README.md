@@ -50,3 +50,10 @@ npm test           # engine unit tests (Vitest)
 npm run typecheck  # strict TS
 npm run build      # production build
 ```
+
+## Quant module (Python)
+
+`quant/` houses a standalone Python analytics package — the Market
+Arbitrage Score engine (Sleeper + advanced efficiency metrics + market
+consensus → league-normalized VORP → ranked Buy/Sell/Hold DataFrame).
+See `quant/README.md`.
